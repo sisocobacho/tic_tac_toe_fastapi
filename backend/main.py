@@ -1,8 +1,12 @@
 from fastapi import FastAPI 
 from fastapi import FastAPI, HTTPException
-from fastapi.responses import HTMLResponse
+from fastapi.responses import HTMLResponse, FileResponse
 from typing import List, Dict
 import time
+import os
+
+BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+FRONTEND_DIR = os.path.join(BASE_DIR, "frontend")
 
 app = FastAPI(title="Tic Tac Toe API")
 
@@ -131,9 +135,53 @@ class TicTacToeGame:
             "game_over": self.game_over
         }
 
+@app.post("/game")
+async def create_game():
+    """Create a new Tic Tac Toe game"""
+    game_id = str(len(games) + 1)
+    game = TicTacToeGame(game_id)
+    games[game_id] = game
+    return game.get_game_state()
+
+@app.get("/game/{game_id}")
+async def get_game_state(game_id: str):
+    """Get current game state"""
+    if game_id not in games:
+        raise HTTPException(status_code=404, detail="Game not found")
+    return games[game_id].get_game_state()
+
+@app.post("/game/{game_id}/move/{position}")
+async def make_move(game_id: str, position: int):
+    """Make a move in the game"""
+    if game_id not in games:
+        raise HTTPException(status_code=404, detail="Game not found")
+    
+    if position < 0 or position > 8:
+        raise HTTPException(status_code=400, detail="Invalid position")
+    
+    game = games[game_id]
+    
+    if game.game_over:
+        raise HTTPException(status_code=400, detail="Game is over")
+    
+    if not game.make_move(position):
+        raise HTTPException(status_code=400, detail="Invalid move")
+    
+    return game.get_game_state()
+
+@app.delete("/game/{game_id}")
+async def delete_game(game_id: str):
+    """Delete a game"""
+    if game_id not in games:
+        raise HTTPException(status_code=404, detail="Game not found")
+    
+    del games[game_id]
+    return {"message": "Game deleted"}
+
 @app.get("/")
 def read_root():
-    return {"message": "API is running"}
+    index_path = os.path.join(FRONTEND_DIR, "index.html")
+    return FileResponse(index_path)
 
 @app.get("/health")
 def health_check():
