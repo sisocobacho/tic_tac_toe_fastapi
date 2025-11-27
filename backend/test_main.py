@@ -63,6 +63,78 @@ def test_tie_game():
     assert game.is_board_full() == True
     assert game.check_winner("X") == False
     assert game.check_winner("O") == False
+
+def test_create_game():
+    """Test creating a new game"""
+    response = client.post("/game")
+    assert response.status_code == 200
+    data = response.json()
+    assert "game_id" in data
+    assert data["board"] == [" " for _ in range(9)]
+    assert data["current_player"] == "X"
+    assert data["winner"] is None
+    assert data["game_over"] is False
+
+def test_get_game_state():
+    """Test getting game state"""
+    # Create a game first
+    create_response = client.post("/game")
+    game_id = create_response.json()["game_id"]
+    
+    # Get game state
+    response = client.get(f"/game/{game_id}")
+    assert response.status_code == 200
+    data = response.json()
+    assert data["game_id"] == game_id
+
+def test_get_nonexistent_game():
+    """Test getting a non-existent game"""
+    response = client.get("/game/nonexistent")
+    assert response.status_code == 404
+
+def test_make_valid_move():
+    """Test making a valid move"""
+    create_response = client.post("/game")
+    game_id = create_response.json()["game_id"]
+    
+    response = client.post(f"/game/{game_id}/move/0")
+    assert response.status_code == 200
+    data = response.json()
+    # After human move, computer should have moved too
+    assert data["board"][0] == "X"
+    assert "O" in data["board"]  # Computer should have made a move
+
+def test_make_invalid_move():
+    """Test making an invalid move"""
+    create_response = client.post("/game")
+    game_id = create_response.json()["game_id"]
+    
+    # Make a move
+    client.post(f"/game/{game_id}/move/0")
+    
+    # Try to make the same move again
+    response = client.post(f"/game/{game_id}/move/0")
+    assert response.status_code == 400
+
+def test_make_move_out_of_bounds():
+    """Test making a move with invalid position"""
+    create_response = client.post("/game")
+    game_id = create_response.json()["game_id"]
+    
+    response = client.post(f"/game/{game_id}/move/9")
+    assert response.status_code == 400
+
+def test_delete_game():
+    """Test deleting a game"""
+    create_response = client.post("/game")
+    game_id = create_response.json()["game_id"]
+    
+    response = client.delete(f"/game/{game_id}")
+    assert response.status_code == 200
+    
+    # Verify game is deleted
+    response = client.get(f"/game/{game_id}")
+    assert response.status_code == 404
     
 if __name__ == "__main__":
     pytest.main([__file__, "-v"])
