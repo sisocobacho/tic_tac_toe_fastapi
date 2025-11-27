@@ -12,3 +12,8 @@ pip install -r requirements.txt
 ```shell script
 python uvicorn backend.main:app
 ```
+
+## Test Project
+```shell script
+python pytest backend/test_main.py
+```
