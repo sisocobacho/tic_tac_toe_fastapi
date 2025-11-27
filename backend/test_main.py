@@ -9,8 +9,8 @@ def test_get_root_endpoint():
     response = client.get("/")
     assert response.status_code == 200
 
-def test_get_healt_endpoint():
-    """Test api root"""
+def test_get_health_endpoint():
+    """Test api health"""
     response = client.get("/health")
     assert response.status_code == 200
     status = response.json()["status"]
