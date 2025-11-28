@@ -1,13 +1,17 @@
-from fastapi import FastAPI, HTTPException, Depends
-from fastapi.responses import FileResponse
-from sqlalchemy import create_engine, Column, Integer, String, Boolean, DateTime
-from sqlalchemy.orm import sessionmaker, Session, declarative_base
-from typing import List, Dict
-from datetime import datetime
-
 import time
 import os
 import json
+
+from fastapi import FastAPI, HTTPException, Depends, status
+from fastapi.responses import FileResponse
+from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
+from sqlalchemy import create_engine, Column, Integer, String, Boolean, DateTime
+from sqlalchemy.orm import sessionmaker, Session, declarative_base, relationship
+from typing import List, Dict
+from datetime import datetime, timedelta
+import jwt
+from passlib.context import CryptContext
+from pydantic import BaseModel
 
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 FRONTEND_DIR = os.path.join(BASE_DIR, "frontend")
@@ -22,6 +26,13 @@ engine = create_engine(
 )
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 Base = declarative_base()
+
+# Security
+pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
+security = HTTPBearer()
+SECRET_KEY = "your-secret-key-change-in-production"
+ALGORITHM = "HS256"
+ACCESS_TOKEN_EXPIRE_MINUTES = 120
 
 class GameModel(Base):
     __tablename__ = "games"
