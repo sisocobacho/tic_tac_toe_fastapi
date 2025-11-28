@@ -350,17 +350,27 @@ async def read_users_me(current_user: User = Depends(get_current_user)):
 
 
 @app.post("/game")
-async def create_game(db: Session = Depends(get_db)):
+async def create_game(
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
     """Create a new Tic Tac Toe game"""
     game_id = generate_game_id() 
     game = TicTacToeGame(game_id)
-    game.save_to_db(db)
+    game.save_to_db(db, current_user.id)
     return game.get_game_state()
 
 @app.get("/game/{game_id}")
-async def get_game_state(game_id: str, db: Session = Depends(get_db)):
-    """Get current game state"""
-    db_game = db.query(GameModel).filter(GameModel.game_id == game_id).first()
+async def get_game_state(
+    game_id: str,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Get current game state (only if user owns the game)"""
+    db_game = db.query(GameModel).filter(
+        GameModel.game_id == game_id,
+        GameModel.user_id == current_user.id
+    ).first()
     if not db_game:
         raise HTTPException(status_code=404, detail="Game not found")
     
@@ -368,12 +378,20 @@ async def get_game_state(game_id: str, db: Session = Depends(get_db)):
     return game.get_game_state()
 
 @app.post("/game/{game_id}/move/{position}")
-async def make_move(game_id: str, position: int, db: Session = Depends(get_db)):
-    """Make a move in the game"""
+async def make_move(
+    game_id: str,
+    position: int,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Make a move in the game (only if user owns the game)"""
     if position < 0 or position > 8:
         raise HTTPException(status_code=400, detail="Invalid position")
     
-    db_game = db.query(GameModel).filter(GameModel.game_id == game_id).first()
+    db_game = db.query(GameModel).filter(
+        GameModel.game_id == game_id,
+        GameModel.user_id == current_user.id
+    ).first()
     if not db_game:
         raise HTTPException(status_code=404, detail="Game not found")
     
@@ -388,9 +406,14 @@ async def make_move(game_id: str, position: int, db: Session = Depends(get_db)):
     return game.get_game_state()
 
 @app.get("/games")
-async def list_games(db: Session = Depends(get_db)):
-    """List all games"""
-    db_games = db.query(GameModel).order_by(GameModel.created_at.desc()).all()
+async def list_games(
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """List all games for the current user"""
+    db_games = db.query(GameModel).filter(
+        GameModel.user_id == current_user.id
+    ).order_by(GameModel.created_at.desc()).all()
     return [
         {
             "game_id": game.game_id,
@@ -404,9 +427,16 @@ async def list_games(db: Session = Depends(get_db)):
     ]
 
 @app.delete("/game/{game_id}")
-async def delete_game(game_id: str, db: Session = Depends(get_db)):
-    """Delete a game"""
-    db_game = db.query(GameModel).filter(GameModel.game_id == game_id).first()
+async def delete_game(
+    game_id: str,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Delete a game (only if user owns the game)"""
+    db_game = db.query(GameModel).filter(
+        GameModel.game_id == game_id,
+        GameModel.user_id == current_user.id
+    ).first()
     if not db_game:
         raise HTTPException(status_code=404, detail="Game not found")
     
@@ -415,9 +445,12 @@ async def delete_game(game_id: str, db: Session = Depends(get_db)):
     return {"message": "Game deleted"}
 
 @app.delete("/games")
-async def delete_all_games(db: Session = Depends(get_db)):
-    """Delete all games (for testing/cleanup)"""
-    db.query(GameModel).delete()
+async def delete_all_games(
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Delete all games for the current user"""
+    db.query(GameModel).filter(GameModel.user_id == current_user.id).delete()
     db.commit()
     return {"message": "All games deleted"}
 
