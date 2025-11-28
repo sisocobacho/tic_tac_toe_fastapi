@@ -291,6 +291,32 @@ def generate_game_id() -> str:
     """Generate a unique game ID"""
     return f"game_{datetime.utcnow().strftime('%Y%m%d_%H%M%S_%f')}"
 
+# Authentication endpoints
+@app.post("/auth/register", response_model=UserResponse)
+async def register(user: UserCreate, db: Session = Depends(get_db)):
+    """Create a new user"""
+    # Check if username already exists
+    db_user = get_user_by_username(db, username=user.username)
+    if db_user:
+        raise HTTPException(status_code=400, detail="Username already registered")
+    
+    # Create new user
+    hashed_password = get_password_hash(user.password)
+    db_user = User(
+        username=user.username,
+        hashed_password=hashed_password
+    )
+    db.add(db_user)
+    db.commit()
+    db.refresh(db_user)
+    
+    return UserResponse(
+        id=db_user.id,
+        username=db_user.username,
+        created_at=db_user.created_at
+    )
+
+
 @app.post("/game")
 async def create_game(db: Session = Depends(get_db)):
     """Create a new Tic Tac Toe game"""
