@@ -1,5 +1,4 @@
-from fastapi import FastAPI 
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Depends
 from fastapi.responses import FileResponse
 from sqlalchemy import create_engine, Column, Integer, String, Boolean, DateTime
 from sqlalchemy.ext.declarative import declarative_base
@@ -9,6 +8,7 @@ from datetime import datetime
 
 import time
 import os
+import json
 
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 FRONTEND_DIR = os.path.join(BASE_DIR, "frontend")
@@ -39,16 +39,58 @@ class GameModel(Base):
 # Create tables
 Base.metadata.create_all(bind=engine)
 
+def get_db():
+    db = SessionLocal()
+    try:
+        yield db
+    finally:
+        db.close()
+
 class TicTacToeGame:
-    def __init__(self, game_id: str):
+    def __init__(self, game_id: str, board: List[str] = None, current_player: str = "X", 
+                 winner: str = None, game_over: bool = False):
         self.game_id = game_id
-        self.board = [" " for _ in range(9)]
-        self.current_player = "X"  # Human starts
-        self.winner = None
-        self.game_over = False
+        self.board = board if board is not None else [" " for _ in range(9)]
+        self.current_player = current_player
+        self.winner = winner
+        self.game_over = game_over
     
-    def make_move(self, position: int) -> bool:
-        """Make a move for the human player"""
+    @classmethod
+    def from_db_model(cls, db_game: GameModel):
+        """Create a TicTacToeGame instance from database model"""
+        board = json.loads(db_game.board)
+        return cls(
+            game_id=db_game.game_id,
+            board=board,
+            current_player=db_game.current_player,
+            winner=db_game.winner,
+            game_over=db_game.game_over
+        )
+    
+    def to_db_model(self, db: Session) -> GameModel:
+        """Convert to database model"""
+        db_game = db.query(GameModel).filter(GameModel.game_id == self.game_id).first()
+        if not db_game:
+            db_game = GameModel(game_id=self.game_id)
+        
+        db_game.board = json.dumps(self.board)
+        db_game.current_player = self.current_player
+        db_game.winner = self.winner
+        db_game.game_over = self.game_over
+        db_game.updated_at = datetime.utcnow()
+
+        return db_game
+    
+    def save_to_db(self, db: Session):
+        """Save current state to database"""
+        db_game = self.to_db_model(db)
+        db.add(db_game)
+        db.commit()
+        db.refresh(db_game)
+        return db_game
+        
+    def make_move(self, position: int, db: Session) -> bool:
+        """Make a move for the human player and save to db"""
         if self.game_over or self.board[position] != " ":
             return False
         
@@ -62,6 +104,7 @@ class TicTacToeGame:
         else:
             self.computer_move()
         
+        self.save_to_db(db)
         return True
     
     def computer_move(self) -> None:
@@ -161,48 +204,81 @@ class TicTacToeGame:
             "game_over": self.game_over
         }
 
+def generate_game_id() -> str:
+    """Generate a unique game ID"""
+    return f"game_{datetime.utcnow().strftime('%Y%m%d_%H%M%S_%f')}"
+
 @app.post("/game")
-async def create_game():
+async def create_game(db: Session = Depends(get_db)):
     """Create a new Tic Tac Toe game"""
-    game_id = str(len(games) + 1)
+    game_id = generate_game_id() 
     game = TicTacToeGame(game_id)
-    games[game_id] = game
+    game.save_to_db(db)
     return game.get_game_state()
 
 @app.get("/game/{game_id}")
-async def get_game_state(game_id: str):
+async def get_game_state(game_id: str, db: Session = Depends(get_db)):
     """Get current game state"""
-    if game_id not in games:
-        raise HTTPException(status_code=404, detail="Game not found")
-    return games[game_id].get_game_state()
-
-@app.post("/game/{game_id}/move/{position}")
-async def make_move(game_id: str, position: int):
-    """Make a move in the game"""
-    if game_id not in games:
+    db_game = db.query(GameModel).filter(GameModel.game_id == game_id).first()
+    if not db_game:
         raise HTTPException(status_code=404, detail="Game not found")
     
+    game = TicTacToeGame.from_db_model(db_game)
+    return game.get_game_state()
+
+@app.post("/game/{game_id}/move/{position}")
+async def make_move(game_id: str, position: int, db: Session = Depends(get_db)):
+    """Make a move in the game"""
     if position < 0 or position > 8:
         raise HTTPException(status_code=400, detail="Invalid position")
     
-    game = games[game_id]
+    db_game = db.query(GameModel).filter(GameModel.game_id == game_id).first()
+    if not db_game:
+        raise HTTPException(status_code=404, detail="Game not found")
+    
+    game = TicTacToeGame.from_db_model(db_game)
     
     if game.game_over:
         raise HTTPException(status_code=400, detail="Game is over")
     
-    if not game.make_move(position):
+    if not game.make_move(position, db):
         raise HTTPException(status_code=400, detail="Invalid move")
     
     return game.get_game_state()
 
+@app.get("/games")
+async def list_games(db: Session = Depends(get_db)):
+    """List all games"""
+    db_games = db.query(GameModel).order_by(GameModel.created_at.desc()).all()
+    return [
+        {
+            "game_id": game.game_id,
+            "current_player": game.current_player,
+            "winner": game.winner,
+            "game_over": game.game_over,
+            "created_at": game.created_at.isoformat(),
+            "updated_at": game.updated_at.isoformat()
+        }
+        for game in db_games
+    ]
+
 @app.delete("/game/{game_id}")
-async def delete_game(game_id: str):
+async def delete_game(game_id: str, db: Session = Depends(get_db)):
     """Delete a game"""
-    if game_id not in games:
+    db_game = db.query(GameModel).filter(GameModel.game_id == game_id).first()
+    if not db_game:
         raise HTTPException(status_code=404, detail="Game not found")
     
-    del games[game_id]
+    db.delete(db_game)
+    db.commit()
     return {"message": "Game deleted"}
+
+@app.delete("/games")
+async def delete_all_games(db: Session = Depends(get_db)):
+    """Delete all games (for testing/cleanup)"""
+    db.query(GameModel).delete()
+    db.commit()
+    return {"message": "All games deleted"}
 
 @app.get("/")
 def read_root():
