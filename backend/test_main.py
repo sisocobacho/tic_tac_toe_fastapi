@@ -104,6 +104,12 @@ def test_create_game():
     assert data["current_player"] == "X"
     assert data["winner"] is None
     assert data["game_over"] is False
+    
+    # Verify game was saved to database
+    db = next(override_get_db())
+    db_game = db.query(GameModel).filter(GameModel.game_id == data["game_id"]).first()
+    assert db_game is not None
+    assert json.loads(db_game.board) == [" " for _ in range(9)]
 
 def test_get_game_state():
     """Test getting game state"""
