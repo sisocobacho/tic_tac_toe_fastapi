@@ -1,8 +1,37 @@
 import pytest
+import json
+
 from fastapi.testclient import TestClient
-from main import app, TicTacToeGame
+from sqlalchemy import create_engine
+from sqlalchemy.orm import sessionmaker
+from main import app, get_db, Base, GameModel, TicTacToeGame
+
+SQLALCHEMY_DATABASE_URL = "sqlite:///./test.db"
+
+engine = create_engine(
+    SQLALCHEMY_DATABASE_URL, connect_args={"check_same_thread": False}
+)
+TestingSessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
+
+def override_get_db():
+    try:
+        db = TestingSessionLocal()
+        yield db
+    finally:
+        db.close()
+
+app.dependency_overrides[get_db] = override_get_db
 
 client = TestClient(app)
+
+@pytest.fixture(autouse=True)
+def setup_database():
+    """Set up the database before each test and tear down after"""
+    # Create tables
+    Base.metadata.create_all(bind=engine)
+    yield
+    # Drop tables
+    Base.metadata.drop_all(bind=engine)
 
 def test_get_root_endpoint():
     """Test api root"""
@@ -49,11 +78,12 @@ def test_game_class_board_full():
 def test_game_class_make_move():
     """Test making moves in TicTacToeGame class"""
     game = TicTacToeGame("test4")
+    db = next(override_get_db())
     # Valid move
-    assert game.make_move(0) == True
+    assert game.make_move(0, db) == True
     assert game.board[0] == "X"
     # Invalid move (position already taken)
-    assert game.make_move(0) == False
+    assert game.make_move(0, db) == False
 
 def test_tie_game():
     """Test tie game detection"""
