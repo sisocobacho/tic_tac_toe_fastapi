@@ -1,68 +1,121 @@
 <!DOCTYPE html>
 <html>
-    <head>
-        <title>Tic Tac Toe</title>
-        <style>
-            body { font-family: Arial, sans-serif; text-align: center; margin: 50px; }
-            .board { display: grid; grid-template-columns: repeat(3, 100px); gap: 5px; margin: 20px auto; width: 310px; }
-            .cell { width: 100px; height: 100px; border: 2px solid #333; display: flex; align-items: center; 
-                   justify-content: center; font-size: 2em; cursor: pointer; background: #f0f0f0; }
-            .cell:hover { background: #e0e0e0; }
-            .status { margin: 20px; font-size: 1.2em; }
-            button { padding: 10px 20px; font-size: 1em; margin: 10px; cursor: pointer; }
-        </style>
-    </head>
-    <body>
-        <h1>Tic Tac Toe</h1>
-        <div class="status" id="status">Click New Game to start!</div>
-        <div class="board" id="board"></div>
-        <button onclick="newGame()">New Game</button>
-        
-        <script>
-            let currentGameId = null;
-            
-            async function newGame() {
-                const response = await fetch('/game', { method: 'POST' });
-                const game = await response.json();
-                currentGameId = game.game_id;
-                updateBoard(game);
-            }
-            
-            async function makeMove(position) {
-                if (!currentGameId) return;
-                
-                const response = await fetch(`/game/${currentGameId}/move/${position}`, { method: 'POST' });
-                const game = await response.json();
-                updateBoard(game);
-            }
-            
-            function updateBoard(game) {
-                const board = document.getElementById('board');
-                board.innerHTML = '';
-                
-                game.board.forEach((cell, index) => {
-                    const cellDiv = document.createElement('div');
-                    cellDiv.className = 'cell';
-                    cellDiv.textContent = cell;
-                    cellDiv.onclick = () => !game.game_over && cell === ' ' && makeMove(index);
-                    board.appendChild(cellDiv);
-                });
-                
-                const status = document.getElementById('status');
-                if (game.game_over) {
-                    status.textContent = game.winner ? 
-                        (game.winner === 'X' ? 'You win!' : 'Computer wins!') : 
-                        "It's a tie!";
-                } else {
-                    status.textContent = game.current_player === 'X' ? 
-                        "Your turn (X)" : "Computer's turn (O)";
-                }
-            }
-            
-            // Initialize empty board
-            document.getElementById('board').innerHTML = Array(9).fill()
-                .map((_, i) => `<div class="cell" onclick="alert('Start a new game first!')"></div>`)
-                .join('');
-        </script>
-    </body>
+<head>
+    <title>Tic Tac Toe</title>
+    <style>
+        body { font-family: Arial, sans-serif; text-align: center; margin: 50px; }
+        .board { display: grid; grid-template-columns: repeat(3, 100px); gap: 5px; margin: 20px auto; width: 310px; }
+        .cell { width: 100px; height: 100px; border: 2px solid #333; display: flex; align-items: center;
+            justify-content: center; font-size: 2em; cursor: pointer; background: #f0f0f0; }
+        .cell:hover { background: #e0e0e0; }
+        .status { margin: 20px; font-size: 1.2em; }
+        button { padding: 10px 20px; font-size: 1em; margin: 10px; cursor: pointer; }
+        .game-history { margin: 20px auto; width: 500px; text-align: left; }
+        .history-item { padding: 10px; border-bottom: 1px solid #ccc; }
+    </style>
+</head>
+<body>
+<h1>Tic Tac Toe</h1>
+<div class="status" id="status">Click New Game to start!</div>
+<div class="board" id="board"></div>
+<button onclick="newGame()">New Game</button>
+<button onclick="loadGameHistory()">Game History</button>
+
+<div class="game-history" id="gameHistory" style="display: none;">
+    <h3>Game History</h3>
+    <div id="historyList"></div>
+    <button onclick="hideGameHistory()">Close</button>
+</div>
+
+<script>
+    let currentGameId = null;
+
+    async function newGame() {
+        const response = await fetch('/game', { method: 'POST' });
+        const game = await response.json();
+        currentGameId = game.game_id;
+        updateBoard(game);
+    }
+
+    async function makeMove(position) {
+        if (!currentGameId) return;
+
+        const response = await fetch(`/game/${currentGameId}/move/${position}`, { method: 'POST' });
+        if (response.ok) {
+            const game = await response.json();
+            updateBoard(game);
+        } else {
+            alert('Invalid move!');
+        }
+    }
+
+    function updateBoard(game) {
+        const board = document.getElementById('board');
+        board.innerHTML = '';
+
+        game.board.forEach((cell, index) => {
+            const cellDiv = document.createElement('div');
+            cellDiv.className = 'cell';
+            cellDiv.textContent = cell;
+            cellDiv.onclick = () => !game.game_over && cell === ' ' && makeMove(index);
+            board.appendChild(cellDiv);
+        });
+
+        const status = document.getElementById('status');
+        if (game.game_over) {
+            status.textContent = game.winner ?
+                (game.winner === 'X' ? 'You win!' : 'Computer wins!') :
+                "It's a tie!";
+        } else {
+            status.textContent = game.current_player === 'X' ?
+                "Your turn (X)" : "Computer's turn (O)";
+        }
+    }
+
+    async function loadGameHistory() {
+        const response = await fetch('/games');
+        const games = await response.json();
+
+        const historyList = document.getElementById('historyList');
+        historyList.innerHTML = '';
+
+        games.forEach(game => {
+            const gameDiv = document.createElement('div');
+            gameDiv.className = 'history-item';
+            gameDiv.innerHTML = `
+                        <strong>Game ID:</strong> ${game.game_id} | 
+                        <strong>Status:</strong> ${game.game_over ? (game.winner || 'Tie') : 'In Progress'} |
+                        <strong>Created:</strong> ${new Date(game.created_at).toLocaleString()}
+                        <button onclick="loadGame('${game.game_id}')">Load</button>
+                        <button onclick="deleteGame('${game.game_id}')">Delete</button>
+                    `;
+            historyList.appendChild(gameDiv);
+        });
+
+        document.getElementById('gameHistory').style.display = 'block';
+    }
+
+    function hideGameHistory() {
+        document.getElementById('gameHistory').style.display = 'none';
+    }
+
+    async function loadGame(gameId) {
+        const response = await fetch(`/game/${gameId}`);
+        const game = await response.json();
+        currentGameId = game.game_id;
+        updateBoard(game);
+        hideGameHistory();
+    }
+
+    async function deleteGame(gameId) {
+        await fetch(`/game/${gameId}`, { method: 'DELETE' });
+        loadGameHistory(); // Refresh the list
+    }
+
+    // Initialize empty board
+    document.getElementById('board').innerHTML = Array(9).fill()
+        .map((_, i) => `<div class="cell" onclick="alert('Start a new game first!')"></div>`)
+        .join('');
+</script>
+</body>
 </html>
