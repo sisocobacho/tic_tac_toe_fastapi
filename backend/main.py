@@ -1,7 +1,12 @@
 from fastapi import FastAPI 
 from fastapi import FastAPI, HTTPException
-from fastapi.responses import HTMLResponse, FileResponse
+from fastapi.responses import FileResponse
+from sqlalchemy import create_engine, Column, Integer, String, Boolean, DateTime
+from sqlalchemy.ext.declarative import declarative_base
+from sqlalchemy.orm import sessionmaker, Session
 from typing import List, Dict
+from datetime import datetime
+
 import time
 import os
 
@@ -10,8 +15,29 @@ FRONTEND_DIR = os.path.join(BASE_DIR, "frontend")
 
 app = FastAPI(title="Tic Tac Toe API")
 
-# todo change to database 
-games = {}
+# Database setup
+SQLALCHEMY_DATABASE_URL = "sqlite:///./tictactoe.db"
+
+engine = create_engine(
+    SQLALCHEMY_DATABASE_URL, connect_args={"check_same_thread": False}
+)
+SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
+Base = declarative_base()
+
+class GameModel(Base):
+    __tablename__ = "games"
+
+    id = Column(Integer, primary_key=True, index=True)
+    game_id = Column(String, unique=True, index=True)
+    board = Column(String)  # Store as JSON string
+    current_player = Column(String, default="X")
+    winner = Column(String, nullable=True)
+    game_over = Column(Boolean, default=False)
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+# Create tables
+Base.metadata.create_all(bind=engine)
 
 class TicTacToeGame:
     def __init__(self, game_id: str):
