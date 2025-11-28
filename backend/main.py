@@ -149,11 +149,11 @@ class TicTacToeGame:
             game_over=db_game.game_over
         )
     
-    def to_db_model(self, db: Session) -> GameModel:
+    def to_db_model(self, db: Session, user_id: int = None) -> GameModel:
         """Convert to database model"""
         db_game = db.query(GameModel).filter(GameModel.game_id == self.game_id).first()
         if not db_game:
-            db_game = GameModel(game_id=self.game_id)
+            db_game = GameModel(game_id=self.game_id, user_id=user_id)
         
         db_game.board = json.dumps(self.board)
         db_game.current_player = self.current_player
@@ -163,15 +163,15 @@ class TicTacToeGame:
 
         return db_game
     
-    def save_to_db(self, db: Session):
+    def save_to_db(self, db: Session, user_id: int = None):
         """Save current state to database"""
-        db_game = self.to_db_model(db)
+        db_game = self.to_db_model(db, user_id)
         db.add(db_game)
         db.commit()
         db.refresh(db_game)
         return db_game
         
-    def make_move(self, position: int, db: Session) -> bool:
+    def make_move(self, position: int, db: Session, user_id: int = None) -> bool:
         """Make a move for the human player and save to db"""
         if self.game_over or self.board[position] != " ":
             return False
@@ -186,7 +186,8 @@ class TicTacToeGame:
         else:
             self.computer_move()
         
-        self.save_to_db(db)
+        # Save to database after move
+        self.save_to_db(db, user_id)
         return True
     
     def computer_move(self) -> None:
