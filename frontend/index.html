@@ -10,42 +10,201 @@
         .cell:hover { background: #e0e0e0; }
         .status { margin: 20px; font-size: 1.2em; }
         button { padding: 10px 20px; font-size: 1em; margin: 10px; cursor: pointer; }
+        .auth-section { margin: 20px auto; width: 300px; padding: 20px; border: 1px solid #ccc; border-radius: 5px; }
+        .auth-form { display: none; margin: 10px 0; }
+        .auth-form input { width: 100%; padding: 8px; margin: 5px 0; }
+        .user-info { margin: 10px; }
         .game-history { margin: 20px auto; width: 500px; text-align: left; }
         .history-item { padding: 10px; border-bottom: 1px solid #ccc; }
+        .error { color: red; margin: 10px; }
+        .success { color: green; margin: 10px; }
     </style>
 </head>
 <body>
 <h1>Tic Tac Toe</h1>
-<div class="status" id="status">Click New Game to start!</div>
+
+<div id="authSection" class="auth-section">
+    <div id="userInfo" class="user-info" style="display: none;">
+        Welcome, <span id="username"></span>!
+        <button onclick="logout()">Logout</button>
+    </div>
+    <div id="loginSection">
+        <button onclick="showLogin()">Login</button>
+        <button onclick="showSignup()">Sign Up</button>
+
+        <div id="loginForm" class="auth-form">
+            <h3>Login</h3>
+            <input type="text" id="loginUsername" placeholder="Username">
+            <input type="password" id="loginPassword" placeholder="Password">
+            <button onclick="login()">Login</button>
+            <button onclick="hideAuthForms()">Cancel</button>
+        </div>
+
+        <div id="signupForm" class="auth-form">
+            <h3>Sign Up</h3>
+            <input type="text" id="signupUsername" placeholder="Username">
+            <input type="password" id="signupPassword" placeholder="Password">
+            <button onclick="signup()">Sign Up</button>
+            <button onclick="hideAuthForms()">Cancel</button>
+        </div>
+    </div>
+</div>
+
+<div class="status" id="status">Please login to play!</div>
 <div class="board" id="board"></div>
-<button onclick="newGame()">New Game</button>
-<button onclick="loadGameHistory()">Game History</button>
+<button onclick="newGame()" id="newGameBtn" disabled>New Game</button>
+<button onclick="loadGameHistory()" id="historyBtn" disabled>Game History</button>
 
 <div class="game-history" id="gameHistory" style="display: none;">
-    <h3>Game History</h3>
+    <h3>Your Game History</h3>
     <div id="historyList"></div>
     <button onclick="hideGameHistory()">Close</button>
 </div>
 
+<div id="message" class="error"></div>
+
 <script>
     let currentGameId = null;
+    let token = localStorage.getItem('token');
+    let currentUser = null;
+
+    // Check if user is already logged in
+    if (token) {
+        verifyToken();
+    }
+
+    async function verifyToken() {
+        try {
+            const response = await fetch('/users/me', {
+                headers: { 'Authorization': 'Bearer ' + token }
+            });
+            if (response.ok) {
+                const user = await response.json();
+                showUserInfo(user);
+            } else {
+                localStorage.removeItem('token');
+                token = null;
+            }
+        } catch (error) {
+            localStorage.removeItem('token');
+            token = null;
+        }
+    }
+
+    function showUserInfo(user) {
+        currentUser = user;
+        document.getElementById('username').textContent = user.username;
+        document.getElementById('userInfo').style.display = 'block';
+        document.getElementById('loginSection').style.display = 'none';
+        document.getElementById('newGameBtn').disabled = false;
+        document.getElementById('historyBtn').disabled = false;
+        document.getElementById('status').textContent = 'Click New Game to start!';
+    }
+
+    function showLogin() {
+        document.getElementById('loginForm').style.display = 'block';
+        document.getElementById('signupForm').style.display = 'none';
+    }
+
+    function showSignup() {
+        document.getElementById('signupForm').style.display = 'block';
+        document.getElementById('loginForm').style.display = 'none';
+    }
+
+    function hideAuthForms() {
+        document.getElementById('loginForm').style.display = 'none';
+        document.getElementById('signupForm').style.display = 'none';
+    }
+
+    async function login() {
+        const username = document.getElementById('loginUsername').value;
+        const password = document.getElementById('loginPassword').value;
+
+        const response = await fetch('/auth/login', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ username, password })
+        });
+
+        if (response.ok) {
+            const data = await response.json();
+            token = data.access_token;
+            localStorage.setItem('token', token);
+            showMessage('Login successful!', 'success');
+            await verifyToken();
+            hideAuthForms();
+        } else {
+            showMessage('Login failed!', 'error');
+        }
+    }
+
+    async function signup() {
+        const username = document.getElementById('signupUsername').value;
+        const password = document.getElementById('signupPassword').value;
+
+        const response = await fetch('/auth/register', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ username, password })
+        });
+
+        if (response.ok) {
+            showMessage('Signup successful! Please login.', 'success');
+            showLogin();
+            // Clear signup form
+            document.getElementById('signupUsername').value = '';
+            document.getElementById('signupPassword').value = '';
+        } else {
+            const error = await response.json();
+            showMessage('Signup failed: ' + error.detail, 'error');
+        }
+    }
+
+    function logout() {
+        localStorage.removeItem('token');
+        token = null;
+        currentUser = null;
+        document.getElementById('userInfo').style.display = 'none';
+        document.getElementById('loginSection').style.display = 'block';
+        document.getElementById('newGameBtn').disabled = true;
+        document.getElementById('historyBtn').disabled = true;
+        document.getElementById('status').textContent = 'Please login to play!';
+        document.getElementById('board').innerHTML = '';
+        currentGameId = null;
+        showMessage('Logged out successfully!', 'success');
+    }
+
+    function showMessage(message, type) {
+        const messageDiv = document.getElementById('message');
+        messageDiv.textContent = message;
+        messageDiv.className = type;
+        setTimeout(() => messageDiv.textContent = '', 3000);
+    }
 
     async function newGame() {
-        const response = await fetch('/game', { method: 'POST' });
+        if (!token) return;
+
+        const response = await fetch('/game', {
+            method: 'POST',
+            headers: { 'Authorization': 'Bearer ' + token }
+        });
         const game = await response.json();
         currentGameId = game.game_id;
         updateBoard(game);
     }
 
     async function makeMove(position) {
-        if (!currentGameId) return;
+        if (!currentGameId || !token) return;
 
-        const response = await fetch(`/game/${currentGameId}/move/${position}`, { method: 'POST' });
+        const response = await fetch(`/game/${currentGameId}/move/${position}`, {
+            method: 'POST',
+            headers: { 'Authorization': 'Bearer ' + token }
+        });
         if (response.ok) {
             const game = await response.json();
             updateBoard(game);
         } else {
-            alert('Invalid move!');
+            showMessage('Invalid move!', 'error');
         }
     }
 
@@ -73,7 +232,11 @@
     }
 
     async function loadGameHistory() {
-        const response = await fetch('/games');
+        if (!token) return;
+
+        const response = await fetch('/games', {
+            headers: { 'Authorization': 'Bearer ' + token }
+        });
         const games = await response.json();
 
         const historyList = document.getElementById('historyList');
@@ -83,7 +246,7 @@
             const gameDiv = document.createElement('div');
             gameDiv.className = 'history-item';
             gameDiv.innerHTML = `
-                        <strong>Game ID:</strong> ${game.game_id} | 
+                        <strong>Game ID:</strong> ${game.game_id} |
                         <strong>Status:</strong> ${game.game_over ? (game.winner || 'Tie') : 'In Progress'} |
                         <strong>Created:</strong> ${new Date(game.created_at).toLocaleString()}
                         <button onclick="loadGame('${game.game_id}')">Load</button>
@@ -100,7 +263,9 @@
     }
 
     async function loadGame(gameId) {
-        const response = await fetch(`/game/${gameId}`);
+        const response = await fetch(`/game/${gameId}`, {
+            headers: { 'Authorization': 'Bearer ' + token }
+        });
         const game = await response.json();
         currentGameId = game.game_id;
         updateBoard(game);
@@ -108,14 +273,13 @@
     }
 
     async function deleteGame(gameId) {
-        await fetch(`/game/${gameId}`, { method: 'DELETE' });
+        await fetch(`/game/${gameId}`, {
+            method: 'DELETE',
+            headers: { 'Authorization': 'Bearer ' + token }
+        });
         loadGameHistory(); // Refresh the list
     }
 
-    // Initialize empty board
-    document.getElementById('board').innerHTML = Array(9).fill()
-        .map((_, i) => `<div class="cell" onclick="alert('Start a new game first!')"></div>`)
-        .join('');
 </script>
 </body>
 </html>
