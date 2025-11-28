@@ -3,6 +3,12 @@
 ## Description
 Tic tac toe game using web technologies
 
+## Features
+- Tic tac toe Game web application
+- Play vs Computer
+- Game History
+- Load and Delete previous games
+
 ## Intallation
 ```shell script
 pip install -r requirements.txt
@@ -17,3 +23,10 @@ python uvicorn backend.main:app
 ```shell script
 python pytest backend/test_main.py
 ```
+
+## Todo
+- [x] Add game vs computer
+- [x] Add db persistance
+- [ ] Add authentication and signup
+- [ ] Add multiplayer
+- [ ] Improve interface
