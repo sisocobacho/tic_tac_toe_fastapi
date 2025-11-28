@@ -171,6 +171,53 @@ def test_delete_game():
     # Verify game is deleted
     response = client.get(f"/game/{game_id}")
     assert response.status_code == 404
+
+def test_list_games():
+    """Test listing all games"""
+    # Create multiple games
+    game1_response = client.post("/game")
+    game2_response = client.post("/game")
+    
+    response = client.get("/games")
+    assert response.status_code == 200
+    games = response.json()
+    assert len(games) >= 2
+    
+    # Verify games are ordered by creation date (newest first)
+    game_ids = [game["game_id"] for game in games]
+    assert game2_response.json()["game_id"] in game_ids
+    assert game1_response.json()["game_id"] in game_ids
+
+def test_delete_all_games():
+    """Test deleting all games"""
+    # Create some games first
+    client.post("/game")
+    client.post("/game")
+    
+    # Delete all games
+    response = client.delete("/games")
+    assert response.status_code == 200
+    
+    # Verify no games left
+    response = client.get("/games")
+    assert response.status_code == 200
+    assert len(response.json()) == 0
+
+def test_game_class_from_db_model():
+    """Test creating TicTacToeGame from database model"""
+    db_game = GameModel(
+        game_id="test_db",
+        board=json.dumps(["X", "O", " ", " ", " ", " ", " ", " ", " "]),
+        current_player="X",
+        winner=None,
+        game_over=False
+    )
+    
+    game = TicTacToeGame.from_db_model(db_game)
+    assert game.game_id == "test_db"
+    assert game.board == ["X", "O", " ", " ", " ", " ", " ", " ", " "]
+    assert game.current_player == "X"
+
     
 if __name__ == "__main__":
     pytest.main([__file__, "-v"])
