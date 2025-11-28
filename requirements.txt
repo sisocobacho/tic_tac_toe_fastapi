@@ -15,7 +15,6 @@ httptools==0.7.1
 httpx==0.28.1
 idna==3.11
 iniconfig==2.3.0
-jwt==1.4.0
 packaging==25.0
 passlib==1.7.4
 pluggy==1.6.0
@@ -24,6 +23,7 @@ pycparser==2.23
 pydantic==2.12.5
 pydantic-core==2.41.5
 pygments==2.19.2
+pyjwt==2.10.1
 pytest==9.0.1
 python-dotenv==1.2.1
 python-jose==3.5.0
