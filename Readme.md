@@ -27,6 +27,6 @@ python pytest backend/test_main.py
 ## Todo
 - [x] Add game vs computer
 - [x] Add db persistance
-- [ ] Add authentication and signup
+- [x] Add authentication and signup
 - [ ] Add multiplayer
 - [ ] Improve interface
