@@ -4,7 +4,8 @@ import json
 from fastapi.testclient import TestClient
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
-from .main import app, get_db, Base, TicTacToeGame, get_password_hash
+from .main import app, get_db, Base, TicTacToeGame
+from .app.services.user import get_password_hash
 from .app.models import GameModel, User
 
 SQLALCHEMY_DATABASE_URL = "sqlite:///./test.db"
@@ -48,7 +49,7 @@ def create_test_user():
 
 def get_auth_headers(username="testuser", password="testpassword"):
     """Helper function to get authentication headers"""
-    response = client.post("/auth/login", json={
+    response = client.post("/api/v1/users/auth/login", json={
         "username": username,
         "password": password
     })
@@ -73,7 +74,7 @@ def test_get_health_endpoint():
 
 def test_user_registration():
     """Test user registration"""
-    response = client.post("/auth/register", json={
+    response = client.post("/api/v1/users/auth/register", json={
         "username": "newuser",
         "password": "newpassword"
     })
@@ -92,7 +93,7 @@ def test_user_login():
     """Test user login"""
     create_test_user()
     
-    response = client.post("/auth/login", json={
+    response = client.post("/api/v1/users/auth/login", json={
         "username": "testuser",
         "password": "testpassword"
     })
@@ -105,7 +106,7 @@ def test_user_login_invalid_credentials():
     """Test user login with invalid credentials"""
     create_test_user()
     
-    response = client.post("/auth/login", json={
+    response = client.post("/api/v1/users/auth/login", json={
         "username": "testuser",
         "password": "wrongpassword"
     })
@@ -116,7 +117,7 @@ def test_get_current_user():
     create_test_user()
     headers = get_auth_headers()
     
-    response = client.get("/users/me", headers=headers)
+    response = client.get("/api/v1/users/me", headers=headers)
     assert response.status_code == 200
     data = response.json()
     assert data["username"] == "testuser"
@@ -125,7 +126,7 @@ def test_get_current_user():
 
 def test_get_current_user_unauthenticated():
     """Test getting current user without authentication"""
-    response = client.get("/users/me")
+    response = client.get("/api/v1/users/me")
     assert response.status_code == 401
 
 def test_create_game_authenticated():
