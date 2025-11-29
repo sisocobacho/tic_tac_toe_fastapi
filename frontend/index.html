@@ -193,9 +193,10 @@
         updateBoard(game);
     }
 
-    async function makeMove(position) {
+    async function makeMove(position, target) {
         if (!currentGameId || !token) return;
-
+        console.log(target);
+        target.textContent = "..."
         const response = await fetch(`/game/${currentGameId}/move/${position}`, {
             method: 'POST',
             headers: { 'Authorization': 'Bearer ' + token }
@@ -216,7 +217,7 @@
             const cellDiv = document.createElement('div');
             cellDiv.className = 'cell';
             cellDiv.textContent = cell;
-            cellDiv.onclick = () => !game.game_over && cell === ' ' && makeMove(index);
+            cellDiv.onclick = (e) => !game.game_over && cell === ' ' && makeMove(index, e.target);
             board.appendChild(cellDiv);
         });
 
