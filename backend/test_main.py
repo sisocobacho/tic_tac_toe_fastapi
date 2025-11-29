@@ -4,8 +4,10 @@ import json
 from fastapi.testclient import TestClient
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
-from .main import app, get_db, Base, TicTacToeGame
+from .main import app, Base
 from .app.services.user import get_password_hash
+from .app.services.game import TicTacToeGame
+from .database import get_db
 from .app.models import GameModel, User
 
 SQLALCHEMY_DATABASE_URL = "sqlite:///./test.db"
@@ -134,7 +136,7 @@ def test_create_game_authenticated():
     create_test_user()
     headers = get_auth_headers()
     
-    response = client.post("/game", headers=headers)
+    response = client.post("/api/v1/games", headers=headers)
     assert response.status_code == 200
     data = response.json()
     assert "game_id" in data
@@ -151,7 +153,7 @@ def test_create_game_authenticated():
 
 def test_create_game_unauthenticated():
     """Test creating a game without authentication"""
-    response = client.post("/game")
+    response = client.post("/api/v1/games")
     assert response.status_code == 401
 
 def test_get_game_state_authenticated():
@@ -160,7 +162,7 @@ def test_get_game_state_authenticated():
     headers = get_auth_headers()
     
     # Create a game first
-    create_response = client.post("/game", headers=headers)
+    create_response = client.post("/api/v1/games", headers=headers)
     game_id = create_response.json()["game_id"]
     
     # Get game state
@@ -175,11 +177,11 @@ def test_get_game_state_authenticated():
     headers = get_auth_headers()
     
     # Create a game first
-    create_response = client.post("/game", headers=headers)
+    create_response = client.post("/api/v1/games", headers=headers)
     game_id = create_response.json()["game_id"]
     
     # Get game state
-    response = client.get(f"/game/{game_id}", headers=headers)
+    response = client.get(f"/api/v1/games/{game_id}", headers=headers)
     assert response.status_code == 200
     data = response.json()
     assert data["game_id"] == game_id
@@ -190,7 +192,7 @@ def test_get_other_users_game():
     user1 = create_test_user()
     headers1 = get_auth_headers()
     
-    create_response = client.post("/game", headers=headers1)
+    create_response = client.post("/api/v1/games", headers=headers1)
     game_id = create_response.json()["game_id"]
     
     # Create second user
@@ -204,7 +206,7 @@ def test_get_other_users_game():
    
     # Try to access first user's game with second user
     headers2 = get_auth_headers("user2", "password2")
-    response = client.get(f"/game/{game_id}", headers=headers2)
+    response = client.get(f"/api/v1/games/{game_id}", headers=headers2)
     assert response.status_code == 404
 
 def test_make_valid_move():
@@ -212,10 +214,10 @@ def test_make_valid_move():
     create_test_user()
     headers = get_auth_headers()
     
-    create_response = client.post("/game", headers=headers)
+    create_response = client.post("/api/v1/games", headers=headers)
     game_id = create_response.json()["game_id"]
     
-    response = client.post(f"/game/{game_id}/move/0", headers=headers)
+    response = client.post(f"/api/v1/games/{game_id}/move/0", headers=headers)
     assert response.status_code == 200
     data = response.json()
     # After human move, computer should have moved too
@@ -234,12 +236,12 @@ def test_make_invalid_move():
     headers = get_auth_headers()
     
     # Create a game and make a move
-    create_response = client.post("/game", headers=headers)
+    create_response = client.post("/api/v1/games", headers=headers)
     game_id = create_response.json()["game_id"]
-    client.post(f"/game/{game_id}/move/0", headers=headers)
+    client.post(f"/api/v1/games/{game_id}/move/0", headers=headers)
     
     # Try to make the same move again
-    response = client.post(f"/game/{game_id}/move/0", headers=headers)
+    response = client.post(f"/api/v1/games/{game_id}/move/0", headers=headers)
     assert response.status_code == 400
 
 def test_make_move_out_of_bounds():
@@ -247,15 +249,15 @@ def test_make_move_out_of_bounds():
     create_test_user()
     headers = get_auth_headers()
     
-    create_response = client.post("/game", headers=headers)
+    create_response = client.post("/api/v1/games", headers=headers)
     game_id = create_response.json()["game_id"]
     
-    response = client.post(f"/game/{game_id}/move/9", headers=headers)
+    response = client.post(f"/api/v1/games/{game_id}/move/9", headers=headers)
     assert response.status_code == 400
 
 def test_make_move_unauthenticated():
     """Test making a move without authentication"""
-    response = client.post("/game/somegame/move/0")
+    response = client.post("/api/v1/games/somegame/move/0")
     assert response.status_code == 401
 
 def test_list_games_authenticated():
@@ -264,10 +266,10 @@ def test_list_games_authenticated():
     headers = get_auth_headers()
     
     # Create multiple games
-    client.post("/game", headers=headers)
-    client.post("/game", headers=headers)
+    client.post("/api/v1/games", headers=headers)
+    client.post("/api/v1/games", headers=headers)
     
-    response = client.get("/games", headers=headers)
+    response = client.get("/api/v1/games", headers=headers)
     assert response.status_code == 200
     games = response.json()
     assert len(games) == 2
@@ -281,10 +283,10 @@ def test_delete_game_authenticated():
     create_test_user()
     headers = get_auth_headers()
     
-    create_response = client.post("/game", headers=headers)
+    create_response = client.post("/api/v1/games", headers=headers)
     game_id = create_response.json()["game_id"]
     
-    response = client.delete(f"/game/{game_id}", headers=headers)
+    response = client.delete(f"/api/v1/games/{game_id}", headers=headers)
     assert response.status_code == 200
     
     # Verify game is deleted from database
@@ -297,7 +299,7 @@ def test_delete_nonexistent_game():
     create_test_user()
     headers = get_auth_headers()
     
-    response = client.delete("/game/nonexistent", headers=headers)
+    response = client.delete("/api/v1/games/nonexistent", headers=headers)
     assert response.status_code == 404
 
 def test_delete_all_games_authenticated():
@@ -306,21 +308,21 @@ def test_delete_all_games_authenticated():
     headers = get_auth_headers()
     
     # Create some games
-    client.post("/game", headers=headers)
-    client.post("/game", headers=headers)
+    client.post("/api/v1/games", headers=headers)
+    client.post("/api/v1/games", headers=headers)
     
     # Delete all games
-    response = client.delete("/games", headers=headers)
+    response = client.delete("/api/v1/games", headers=headers)
     assert response.status_code == 200
     
     # Verify no games left for user
-    response = client.get("/games", headers=headers)
+    response = client.get("/api/v1/games", headers=headers)
     assert response.status_code == 200
     assert len(response.json()) == 0
 
 def test_delete_all_games_unauthenticated():
     """Test deleting all games without authentication"""
-    response = client.delete("/games")
+    response = client.delete("/api/v1/games")
     assert response.status_code == 401
 
 def test_game_class_check_winner():
@@ -374,7 +376,7 @@ def test_get_nonexistent_game():
     """Test getting a non-existent game"""
     create_test_user()
     headers = get_auth_headers()
-    response = client.get("/game/nonexistent", headers=headers)
+    response = client.get("/api/v1/games/nonexistent", headers=headers)
     assert response.status_code == 404
 
 def test_game_class_from_db_model():
