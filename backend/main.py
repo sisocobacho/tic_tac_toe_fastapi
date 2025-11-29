@@ -11,47 +11,17 @@ from typing import List, Dict
 from datetime import datetime, timedelta
 import jwt
 from passlib.context import CryptContext
-from pydantic import BaseModel
 
 from .config import settings
 from .database import get_db, Base, engine
-from .app.models import GameModel        
-
+from .app.models import GameModel, User        
+from .app import schema
 app = FastAPI(title="Tic Tac Toe API")
 
 # Security
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 security = HTTPBearer()
 
-# Pydantic models
-class UserCreate(BaseModel):
-    username: str
-    password: str
-
-class UserLogin(BaseModel):
-    username: str
-    password: str
-
-class Token(BaseModel):
-    access_token: str
-    token_type: str
-
-class UserResponse(BaseModel):
-    id: int
-    username: str
-    created_at: datetime
-
-# Database models
-class User(Base):
-    __tablename__ = "users"
-
-    id = Column(Integer, primary_key=True, index=True)
-    username = Column(String, unique=True, index=True)
-    hashed_password = Column(String)
-    created_at = Column(DateTime, default=datetime.utcnow)
-    is_active = Column(Boolean, default=True)
-    
-    games = relationship("GameModel", back_populates="user")
 
 
 # Create tables
@@ -271,8 +241,8 @@ def generate_game_id() -> str:
     return f"game_{datetime.utcnow().strftime('%Y%m%d_%H%M%S_%f')}"
 
 # Authentication endpoints
-@app.post("/auth/register", response_model=UserResponse)
-async def register(user: UserCreate, db: Session = Depends(get_db)):
+@app.post("/auth/register", response_model=schema.UserResponse)
+async def register(user: schema.UserCreate, db: Session = Depends(get_db)):
     """Create a new user"""
     # Check if username already exists
     db_user = get_user_by_username(db, username=user.username)
@@ -289,14 +259,14 @@ async def register(user: UserCreate, db: Session = Depends(get_db)):
     db.commit()
     db.refresh(db_user)
     
-    return UserResponse(
+    return schema.UserResponse(
         id=db_user.id,
         username=db_user.username,
         created_at=db_user.created_at
     )
 
-@app.post("/auth/login", response_model=Token)
-async def login(user_login: UserLogin, db: Session = Depends(get_db)):
+@app.post("/auth/login", response_model=schema.Token)
+async def login(user_login: schema.UserLogin, db: Session = Depends(get_db)):
     user = authenticate_user(db, user_login.username, user_login.password)
     if not user:
         raise HTTPException(
@@ -309,9 +279,9 @@ async def login(user_login: UserLogin, db: Session = Depends(get_db)):
     )
     return {"access_token": access_token, "token_type": "bearer"}
 
-@app.get("/users/me", response_model=UserResponse)
+@app.get("/users/me", response_model=schema.UserResponse)
 async def read_users_me(current_user: User = Depends(get_current_user)):
-    return UserResponse(
+    return schema.UserResponse(
         id=current_user.id,
         username=current_user.username,
         created_at=current_user.created_at
