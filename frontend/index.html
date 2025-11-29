@@ -185,7 +185,7 @@
     async function newGame() {
         if (!token) return;
 
-        const response = await fetch('/game', {
+        const response = await fetch(API_BASE + '/games/', {
             method: 'POST',
             headers: { 'Authorization': 'Bearer ' + token }
         });
@@ -196,9 +196,8 @@
 
     async function makeMove(position, target) {
         if (!currentGameId || !token) return;
-        console.log(target);
         target.textContent = "..."
-        const response = await fetch(`/game/${currentGameId}/move/${position}`, {
+        const response = await fetch(`${API_BASE}/games/${currentGameId}/move/${position}`, {
             method: 'POST',
             headers: { 'Authorization': 'Bearer ' + token }
         });
@@ -236,7 +235,7 @@
     async function loadGameHistory() {
         if (!token) return;
 
-        const response = await fetch('/games', {
+        const response = await fetch(API_BASE + '/games', {
             headers: { 'Authorization': 'Bearer ' + token }
         });
         const games = await response.json();
@@ -265,7 +264,7 @@
     }
 
     async function loadGame(gameId) {
-        const response = await fetch(`/game/${gameId}`, {
+        const response = await fetch(`${API_BASE}/games/${gameId}`, {
             headers: { 'Authorization': 'Bearer ' + token }
         });
         const game = await response.json();
@@ -275,7 +274,7 @@
     }
 
     async function deleteGame(gameId) {
-        await fetch(`/game/${gameId}`, {
+        await fetch(`${API_BASE}/games/${gameId}`, {
             method: 'DELETE',
             headers: { 'Authorization': 'Bearer ' + token }
         });
