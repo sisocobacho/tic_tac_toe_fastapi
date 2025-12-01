@@ -5,23 +5,27 @@ from ....database import get_db
 from ...models import GameModel, User        
 from ...services.user import  get_current_user
 from ...services.game import TicTacToeGame, generate_game_id
+from ...schema.game import GameStateResponse, GameSummaryResponse
+from typing import List
 
 router = APIRouter()
 
 @router.post("/")
 async def create_game(
     current_user: User = Depends(get_current_user),
+    response_model=GameStateResponse,
     db: Session = Depends(get_db)
 ):
     """Create a new Tic Tac Toe game"""
     game_id = generate_game_id() 
     game = TicTacToeGame(game_id)
     game.save_to_db(db, current_user.id)
-    return game.get_game_state()
+    return GameStateResponse(**game.get_game_state())
 
 @router.get("/{game_id}")
 async def get_game_state(
     game_id: str,
+    response_model=GameStateResponse,
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
@@ -34,12 +38,13 @@ async def get_game_state(
         raise HTTPException(status_code=404, detail="Game not found")
     
     game = TicTacToeGame.from_db_model(db_game)
-    return game.get_game_state()
+    return GameStateResponse(**game.get_game_state())
 
 @router.post("/{game_id}/move/{position}")
 async def make_move(
     game_id: str,
     position: int,
+    response_model=GameStateResponse,
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
@@ -62,10 +67,11 @@ async def make_move(
     if not game.make_move(position, db):
         raise HTTPException(status_code=400, detail="Invalid move")
     
-    return game.get_game_state()
+    return GameStateResponse(**game.get_game_state())
 
 @router.get("/")
 async def list_games(
+    response_model=List[GameStateResponse],
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
@@ -74,14 +80,14 @@ async def list_games(
         GameModel.user_id == current_user.id
     ).order_by(GameModel.created_at.desc()).all()
     return [
-        {
-            "game_id": game.game_id,
-            "current_player": game.current_player,
-            "winner": game.winner,
-            "game_over": game.game_over,
-            "created_at": game.created_at.isoformat(),
-            "updated_at": game.updated_at.isoformat()
-        }
+       GameSummaryResponse( 
+            game_id = game.game_id,
+            current_player = game.current_player,
+            winner = game.winner,
+            game_over = game.game_over,
+            created_at = game.created_at.isoformat(),
+            updated_at = game.updated_at.isoformat()
+        )
         for game in db_games
     ]
 
