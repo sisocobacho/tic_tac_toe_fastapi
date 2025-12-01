@@ -10,10 +10,9 @@ from typing import List
 
 router = APIRouter()
 
-@router.post("/")
+@router.post("/", response_model=GameStateResponse, )
 async def create_game(
     current_user: User = Depends(get_current_user),
-    response_model=GameStateResponse,
     db: Session = Depends(get_db)
 ):
     """Create a new Tic Tac Toe game"""
@@ -22,10 +21,9 @@ async def create_game(
     game.save_to_db(db, current_user.id)
     return GameStateResponse(**game.get_game_state())
 
-@router.get("/{game_id}")
+@router.get("/{game_id}", response_model=GameStateResponse)
 async def get_game_state(
     game_id: str,
-    response_model=GameStateResponse,
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
@@ -40,11 +38,10 @@ async def get_game_state(
     game = TicTacToeGame.from_db_model(db_game)
     return GameStateResponse(**game.get_game_state())
 
-@router.post("/{game_id}/move/{position}")
+@router.post("/{game_id}/move/{position}", response_model=GameStateResponse)
 async def make_move(
     game_id: str,
     position: int,
-    response_model=GameStateResponse,
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
@@ -69,11 +66,10 @@ async def make_move(
     
     return GameStateResponse(**game.get_game_state())
 
-@router.get("/")
+@router.get("/", response_model=List[GameSummaryResponse])
 async def list_games(
     limit: int,
     skip: int=0,
-    response_model=List[GameStateResponse],
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
