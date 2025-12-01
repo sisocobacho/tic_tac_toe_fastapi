@@ -71,6 +71,8 @@ async def make_move(
 
 @router.get("/")
 async def list_games(
+    limit: int,
+    skip: int=0,
     response_model=List[GameStateResponse],
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
@@ -78,7 +80,8 @@ async def list_games(
     """List all games for the current user"""
     db_games = db.query(GameModel).filter(
         GameModel.user_id == current_user.id
-    ).order_by(GameModel.created_at.desc()).all()
+    ).order_by(GameModel.created_at.desc()).offset(skip).limit(limit).all()
+
     return [
        GameSummaryResponse( 
             game_id = game.game_id,
