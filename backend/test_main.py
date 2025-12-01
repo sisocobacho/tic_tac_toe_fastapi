@@ -269,7 +269,7 @@ def test_list_games_authenticated():
     client.post("/api/v1/games", headers=headers)
     client.post("/api/v1/games", headers=headers)
     
-    response = client.get("/api/v1/games", headers=headers)
+    response = client.get("/api/v1/games?limit=2", headers=headers)
     assert response.status_code == 200
     games = response.json()
     assert len(games) == 2
@@ -277,6 +277,23 @@ def test_list_games_authenticated():
     # Verify games are ordered by creation date (newest first)
     assert "game_id" in games[0]
     assert "created_at" in games[0]
+
+def test_list_games_with_skip_and_limit():
+    """Test listing games with both skip and limit parameters"""
+    create_test_user()
+    headers = get_auth_headers()
+    
+    # Create 10 games
+    game_ids = []
+    for i in range(10):
+        response = client.post("/api/v1/games", headers=headers)
+        game_ids.append(response.json()["game_id"])
+    
+    # Skip 3, limit 4
+    response = client.get("/api/v1/games?skip=3&limit=4", headers=headers)
+    assert response.status_code == 200
+    games = response.json()
+    assert len(games) == 4
 
 def test_delete_game_authenticated():
     """Test deleting a game when authenticated"""
@@ -316,7 +333,7 @@ def test_delete_all_games_authenticated():
     assert response.status_code == 200
     
     # Verify no games left for user
-    response = client.get("/api/v1/games", headers=headers)
+    response = client.get("/api/v1/games?limit=10", headers=headers)
     assert response.status_code == 200
     assert len(response.json()) == 0
 
