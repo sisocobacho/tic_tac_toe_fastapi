@@ -15,7 +15,7 @@ ruff:
 	uv add --dev ruff
 		
 check: ruff
-	uv run ruff check
+	uv run ruff check --fix
 
 format: ruff
 	uv run ruff format
