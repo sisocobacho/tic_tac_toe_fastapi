@@ -166,7 +166,7 @@ def test_get_game_state_authenticated():
     game_id = create_response.json()["game_id"]
     
     # Get game state
-    response = client.get(f"/game/{game_id}", headers=headers)
+    response = client.get(f"/api/v1/games/{game_id}", headers=headers)
     assert response.status_code == 200
     data = response.json()
     assert data["game_id"] == game_id
@@ -174,11 +174,14 @@ def test_get_game_state_authenticated():
 def test_get_other_users_game():
     """Test getting another user's game"""
     # Create first user and game
+    create_test_user()
     headers1 = get_auth_headers()
     
     create_response = client.post("/api/v1/games", headers=headers1)
-    game_id = create_response.json()["game_id"]
-    
+    assert create_response.status_code == 200
+    data = create_response.json()
+    assert "game_id" in data
+    game_id = data["game_id"]
     # Create second user
     db = next(override_get_db())
     user2 = User(
@@ -187,7 +190,6 @@ def test_get_other_users_game():
     )
     db.add(user2)
     db.commit()
-   
     # Try to access first user's game with second user
     headers2 = get_auth_headers("user2", "password2")
     response = client.get(f"/api/v1/games/{game_id}", headers=headers2)
@@ -362,7 +364,7 @@ def test_game_class_make_move():
     assert game.make_move(0, db)
     assert game.board[0] == "X"
     # Invalid move (position already taken)
-    assert game.make_move(0, db)
+    assert not game.make_move(0, db)
 
 def test_tie_game():
     """Test tie game detection"""
