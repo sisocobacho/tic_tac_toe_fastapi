@@ -1,6 +1,6 @@
-from pydantic import BaseModel, validator, Field
+from pydantic import BaseModel
 from datetime import datetime
-from typing import List, Dict, Optional
+from typing import List, Optional
 
 class GameStateResponse(BaseModel):
     game_id: str
