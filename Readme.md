@@ -13,17 +13,33 @@ Tic tac toe game using web technologies
 ```shell script
 pip install -r requirements.txt
 ```
+### You also can use uv. You need to have it install.
 
+```shell script
+uv sync --locked
+```
+or use make. See make file for all commands
+
+```shell script
+make install
+```
 ## Run Project
 ```shell script
 python uvicorn backend.main:app
+```
+or with uv
+```shell script
+make run
 ```
 
 ## Test Project
 ```shell script
 python pytest backend/test_main.py
 ```
-
+or with uv.
+```shell script
+make test
+```
 ## Todo
 - [x] Add game vs computer
 - [x] Add db persistance
