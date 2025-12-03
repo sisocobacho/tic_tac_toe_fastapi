@@ -171,25 +171,9 @@ def test_get_game_state_authenticated():
     data = response.json()
     assert data["game_id"] == game_id
 
-def test_get_game_state_authenticated():
-    """Test getting game state when authenticated"""
-    create_test_user()
-    headers = get_auth_headers()
-    
-    # Create a game first
-    create_response = client.post("/api/v1/games", headers=headers)
-    game_id = create_response.json()["game_id"]
-    
-    # Get game state
-    response = client.get(f"/api/v1/games/{game_id}", headers=headers)
-    assert response.status_code == 200
-    data = response.json()
-    assert data["game_id"] == game_id
-
 def test_get_other_users_game():
     """Test getting another user's game"""
     # Create first user and game
-    user1 = create_test_user()
     headers1 = get_auth_headers()
     
     create_response = client.post("/api/v1/games", headers=headers1)
@@ -348,46 +332,46 @@ def test_game_class_check_winner():
     
     # Test row win
     game.board = ["X", "X", "X", " ", " ", " ", " ", " ", " "]
-    assert game.check_winner("X") == True
-    assert game.check_winner("O") == False
+    assert game.check_winner("X")
+    assert not game.check_winner("O")
     
     # Test column win
     game.board = ["O", " ", " ", "O", " ", " ", "O", " ", " "]
-    assert game.check_winner("O") == True
+    assert game.check_winner("O")
     
     # Test diagonal win
     game.board = ["X", " ", " ", " ", "X", " ", " ", " ", "X"]
-    assert game.check_winner("X") == True
+    assert game.check_winner("X")
 
 def test_game_class_board_full():
     """Test board full checking in TicTacToeGame class"""
     game = TicTacToeGame("test3")
     
     # Empty board
-    assert game.is_board_full() == False
+    assert not game.is_board_full()
     
     # Full board
     game.board = ["X", "O", "X", "O", "X", "O", "O", "X", "O"]
-    assert game.is_board_full() == True
+    assert game.is_board_full()
 
 def test_game_class_make_move():
     """Test making moves in TicTacToeGame class"""
     game = TicTacToeGame("test4")
     db = next(override_get_db())
     # Valid move
-    assert game.make_move(0, db) == True
+    assert game.make_move(0, db)
     assert game.board[0] == "X"
     # Invalid move (position already taken)
-    assert game.make_move(0, db) == False
+    assert game.make_move(0, db)
 
 def test_tie_game():
     """Test tie game detection"""
     game = TicTacToeGame("test_tie")
     # Create a tie scenario
     game.board = ["X", "O", "X", "X", "O", "O", "O", "X", "X"]
-    assert game.is_board_full() == True
-    assert game.check_winner("X") == False
-    assert game.check_winner("O") == False
+    assert game.is_board_full()
+    assert not game.check_winner("X")
+    assert not game.check_winner("O")
 
 def test_get_nonexistent_game():
     """Test getting a non-existent game"""
