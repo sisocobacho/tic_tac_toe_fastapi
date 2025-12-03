@@ -1,13 +1,21 @@
 from datetime import timedelta
-from sqlalchemy.orm import Session 
-from fastapi import APIRouter, Depends, HTTPException, status 
+from sqlalchemy.orm import Session
+from fastapi import APIRouter, Depends, HTTPException, status
 from ....database import get_db
-from ...services.user import get_password_hash, get_user_by_username, authenticate_user, create_access_token, get_current_user
-from ...models import User        
+from ...services.user import (
+    get_password_hash,
+    get_user_by_username,
+    authenticate_user,
+    create_access_token,
+    get_current_user,
+)
+from ...models import User
 from ... import schema
 from ....config import settings
 
 router = APIRouter()
+
+
 # Authentication endpoints
 @router.post("/auth/register", response_model=schema.UserResponse)
 async def register(user: schema.UserCreate, db: Session = Depends(get_db)):
@@ -16,22 +24,18 @@ async def register(user: schema.UserCreate, db: Session = Depends(get_db)):
     db_user = get_user_by_username(db, username=user.username)
     if db_user:
         raise HTTPException(status_code=400, detail="Username already registered")
-    
+
     # Create new user
     hashed_password = get_password_hash(user.password)
-    db_user = User(
-        username=user.username,
-        hashed_password=hashed_password
-    )
+    db_user = User(username=user.username, hashed_password=hashed_password)
     db.add(db_user)
     db.commit()
     db.refresh(db_user)
-    
+
     return schema.UserResponse(
-        id=db_user.id,
-        username=db_user.username,
-        created_at=db_user.created_at
+        id=db_user.id, username=db_user.username, created_at=db_user.created_at
     )
+
 
 @router.post("/auth/login", response_model=schema.Token)
 async def login(user_login: schema.UserLogin, db: Session = Depends(get_db)):
@@ -47,12 +51,11 @@ async def login(user_login: schema.UserLogin, db: Session = Depends(get_db)):
     )
     return {"access_token": access_token, "token_type": "bearer"}
 
+
 @router.get("/me", response_model=schema.UserResponse)
 async def read_users_me(current_user: User = Depends(get_current_user)):
     return schema.UserResponse(
         id=current_user.id,
         username=current_user.username,
-        created_at=current_user.created_at
+        created_at=current_user.created_at,
     )
-
-
