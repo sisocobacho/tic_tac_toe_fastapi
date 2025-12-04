@@ -5,6 +5,7 @@ description = "Add your description here"
 readme = "README.md"
 requires-python = ">=3.11"
 dependencies = [
+    "aiosqlite>=0.21.0",
     "annotated-doc==0.0.4",
     "annotated-types==0.7.0",
     "anyio==4.11.0",
@@ -29,6 +30,7 @@ dependencies = [
     "pycparser==2.23",
     "pydantic==2.12.5",
     "pydantic-core==2.41.5",
+    "pydantic-settings>=2.12.0",
     "pygments==2.19.2",
     "pyjwt==2.10.1",
     "pytest==9.0.1",
@@ -61,4 +63,23 @@ filterwarnings = [
     "error",
     "ignore::DeprecationWarning",
     "ignore:.*unclosed.*:ResourceWarning",
+]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/*" = [
+    "S101",    # Use of assert detected
+	"PLC0415", # Import outside toplevel
+]
+
+[tool.ruff.lint.pydocstyle]
+convention = "pep257"
+ignore-decorators = ["typing.overload"]
+
+[tool.ruff.lint.pylint]
+allow-magic-value-types = ["int", "str", "float", "bytes"]
+
+[tool.ruff.lint.flake8-bugbear]
+extend-immutable-calls = [
+  "fastapi.Depends",
+  "fastapi.Query",
 ]
