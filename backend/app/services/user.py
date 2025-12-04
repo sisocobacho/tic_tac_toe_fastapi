@@ -1,13 +1,14 @@
 from datetime import datetime, timedelta
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from fastapi import HTTPException, Depends, status
+from sqlalchemy.ext.asyncio import AsyncSession as Session
 from passlib.context import CryptContext
-from sqlalchemy.orm import Session
+from sqlalchemy import select
 import jwt
 
-from ...config import settings
-from ...database import get_db
-from ..models import User
+from backend.config import settings
+from backend.database import get_db
+from app.models.user import User
 
 # Security
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
@@ -22,12 +23,14 @@ def get_password_hash(password):
     return pwd_context.hash(password)
 
 
-def get_user_by_username(db: Session, username: str):
-    return db.query(User).filter(User.username == username).first()
+async def get_user_by_username(db: Session, username: str) -> User | None:
+    s = select(User).where(User.username == username)
+    user = (await db.execute(s)).scalar_one_or_none()
+    return user
 
 
-def authenticate_user(db: Session, username: str, password: str):
-    user = get_user_by_username(db, username)
+async def authenticate_user(db: Session, username: str, password: str):
+    user = await get_user_by_username(db, username)
     if not user:
         return False
     if not verify_password(password, user.hashed_password):
@@ -35,7 +38,7 @@ def authenticate_user(db: Session, username: str, password: str):
     return user
 
 
-def create_access_token(data: dict, expires_delta: timedelta = None):
+def create_access_token(data: dict, expires_delta: timedelta | None = None):
     to_encode = data.copy()
     if expires_delta:
         expire = datetime.utcnow() + expires_delta
@@ -69,7 +72,7 @@ async def get_current_user(
     except jwt.PyJWTError:
         raise credentials_exception
 
-    user = get_user_by_username(db, username=username)
+    user = await get_user_by_username(db, username=username)
     if user is None:
         raise credentials_exception
     return user

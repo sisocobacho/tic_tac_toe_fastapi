@@ -2,18 +2,18 @@ from datetime import datetime
 from typing import List, Dict
 import json
 
-from sqlalchemy.orm import Session
-
-from ..models import GameModel
+from sqlalchemy.ext.asyncio import AsyncSession as Session
+from sqlalchemy import select
+from app.models.game import GameModel
 
 
 class TicTacToeGame:
     def __init__(
         self,
         game_id: str,
-        board: List[str] = None,
+        board: List[str] | None = None,
         current_player: str = "X",
-        winner: str = None,
+        winner: str = "",
         game_over: bool = False,
     ):
         self.game_id = game_id
@@ -23,7 +23,7 @@ class TicTacToeGame:
         self.game_over = game_over
 
     @classmethod
-    def from_db_model(cls, db_game: GameModel):
+    async def from_db_model(cls, db_game: GameModel):
         """Create a TicTacToeGame instance from database model"""
         board = json.loads(db_game.board)
         return cls(
@@ -34,10 +34,19 @@ class TicTacToeGame:
             game_over=db_game.game_over,
         )
 
-    def to_db_model(self, db: Session, user_id: int = None) -> GameModel:
+    async def to_db_model(self, db: Session, user_id: int | None = None) -> GameModel:
         """Convert to database model"""
-        db_game = db.query(GameModel).filter(GameModel.game_id == self.game_id).first()
+        print("select", self.game_id)
+        s = select(GameModel).where(
+            GameModel.game_id == self.game_id,
+        )
+
+        result = await db.execute(s)
+        db_game = result.scalar_one_or_none()
+
+        print("to db game", db_game)
         if not db_game:
+            print("no game")
             db_game = GameModel(game_id=self.game_id, user_id=user_id)
 
         db_game.board = json.dumps(self.board)
@@ -48,15 +57,17 @@ class TicTacToeGame:
 
         return db_game
 
-    def save_to_db(self, db: Session, user_id: int = None):
+    async def save_to_db(self, db: Session, user_id: int | None = None):
         """Save current state to database"""
-        db_game = self.to_db_model(db, user_id)
+        db_game = await self.to_db_model(db, user_id)
         db.add(db_game)
-        db.commit()
-        db.refresh(db_game)
+        await db.commit()
+        await db.refresh(db_game)
         return db_game
 
-    def make_move(self, position: int, db: Session, user_id: int = None) -> bool:
+    async def make_move(
+        self, position: int, db: Session, user_id: int | None = None
+    ) -> bool:
         """Make a move for the human player and save to db"""
         if self.game_over or self.board[position] != " ":
             return False
@@ -72,7 +83,7 @@ class TicTacToeGame:
             self.computer_move()
 
         # Save to database after move
-        self.save_to_db(db, user_id)
+        await self.save_to_db(db, user_id)
         return True
 
     def computer_move(self) -> None:
@@ -105,7 +116,7 @@ class TicTacToeGame:
             else:
                 self.current_player = "X"
 
-    def minimax(self, board: List[str], depth: int, is_maximizing: bool) -> int:
+    def minimax(self, board: List[str], depth: int, is_maximizing: bool) -> float:
         """Minimax algorithm for computer AI"""
         scores = {"X": -1, "O": 1, "tie": 0}
 
@@ -167,7 +178,7 @@ class TicTacToeGame:
         """Check if a given board is full"""
         return " " not in board
 
-    def get_game_state(self) -> Dict:
+    async def get_game_state(self) -> Dict:
         """Return current game state"""
         return {
             "game_id": self.game_id,
@@ -178,6 +189,6 @@ class TicTacToeGame:
         }
 
 
-def generate_game_id() -> str:
+async def generate_game_id() -> str:
     """Generate a unique game ID"""
     return f"game_{datetime.utcnow().strftime('%Y%m%d_%H%M%S_%f')}"

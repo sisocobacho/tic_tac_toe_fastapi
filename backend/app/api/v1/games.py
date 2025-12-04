@@ -1,10 +1,12 @@
 from fastapi import APIRouter, HTTPException, Depends
-from sqlalchemy.orm import Session
-from ....database import get_db
-from ...models import GameModel, User
-from ...services.user import get_current_user
-from ...services.game import TicTacToeGame, generate_game_id
-from ...schema.game import GameStateResponse, GameSummaryResponse
+from backend.database import get_db
+from sqlalchemy.ext.asyncio import AsyncSession as Session
+from sqlalchemy import select
+from app.models.user import User
+from app.models.game import GameModel
+from app.services.user import get_current_user
+from app.services.game import TicTacToeGame, generate_game_id
+from app.schema.game import GameStateResponse, GameSummaryResponse
 from typing import List
 
 router = APIRouter()
@@ -18,10 +20,11 @@ async def create_game(
     current_user: User = Depends(get_current_user), db: Session = Depends(get_db)
 ):
     """Create a new Tic Tac Toe game"""
-    game_id = generate_game_id()
+    game_id = await generate_game_id()
     game = TicTacToeGame(game_id)
-    game.save_to_db(db, current_user.id)
-    return GameStateResponse(**game.get_game_state())
+    await game.save_to_db(db, current_user.id)
+    state = await game.get_game_state()
+    return GameStateResponse(**state)
 
 
 @router.get("/{game_id}", response_model=GameStateResponse)
@@ -31,16 +34,19 @@ async def get_game_state(
     db: Session = Depends(get_db),
 ):
     """Get current game state (only if user owns the game)"""
-    db_game = (
-        db.query(GameModel)
-        .filter(GameModel.game_id == game_id, GameModel.user_id == current_user.id)
-        .first()
+    s = select(GameModel).where(
+        GameModel.game_id == game_id, GameModel.user_id == current_user.id
     )
+
+    result = await db.execute(s)
+    db_game = result.scalar_one_or_none()
+
     if not db_game:
         raise HTTPException(status_code=404, detail="Game not found")
 
-    game = TicTacToeGame.from_db_model(db_game)
-    return GameStateResponse(**game.get_game_state())
+    game = await TicTacToeGame.from_db_model(db_game)
+    state = await game.get_game_state()
+    return GameStateResponse(**state)
 
 
 @router.post("/{game_id}/move/{position}", response_model=GameStateResponse)
@@ -54,23 +60,26 @@ async def make_move(
     if position < 0 or position > 8:
         raise HTTPException(status_code=400, detail="Invalid position")
 
-    db_game = (
-        db.query(GameModel)
-        .filter(GameModel.game_id == game_id, GameModel.user_id == current_user.id)
-        .first()
+    s = select(GameModel).where(
+        GameModel.game_id == game_id, GameModel.user_id == current_user.id
     )
+
+    result = await db.execute(s)
+
+    db_game = result.scalar_one_or_none()
     if not db_game:
         raise HTTPException(status_code=404, detail="Game not found")
 
-    game = TicTacToeGame.from_db_model(db_game)
-
+    game = await TicTacToeGame.from_db_model(db_game)
+    print("game", game, game.game_id, db_game.game_id)
     if game.game_over:
         raise HTTPException(status_code=400, detail="Game is over")
 
-    if not game.make_move(position, db):
+    if not await game.make_move(position, db):
         raise HTTPException(status_code=400, detail="Invalid move")
 
-    return GameStateResponse(**game.get_game_state())
+    state = await game.get_game_state()
+    return GameStateResponse(**state)
 
 
 @router.get("/", response_model=List[GameSummaryResponse])
@@ -81,14 +90,14 @@ async def list_games(
     db: Session = Depends(get_db),
 ):
     """List all games for the current user"""
-    db_games = (
-        db.query(GameModel)
-        .filter(GameModel.user_id == current_user.id)
-        .order_by(GameModel.created_at.desc())
+    s = (
+        select(GameModel)
+        .where(GameModel.user_id == current_user.id)
         .offset(skip)
         .limit(limit)
-        .all()
     )
+    result = await db.execute(s)
+    db_games = result.all()
 
     return [
         GameSummaryResponse(
@@ -110,16 +119,17 @@ async def delete_game(
     db: Session = Depends(get_db),
 ):
     """Delete a game (only if user owns the game)"""
-    db_game = (
-        db.query(GameModel)
-        .filter(GameModel.game_id == game_id, GameModel.user_id == current_user.id)
-        .first()
+    s = select(GameModel).where(
+        GameModel.game_id == game_id, GameModel.user_id == current_user.id
     )
+    result = await db.execute(s)
+    db_game = result.scalar_one_or_none()
     if not db_game:
         raise HTTPException(status_code=404, detail="Game not found")
 
-    db.delete(db_game)
-    db.commit()
+    await db.delete(db_game)
+    await db.commit()
+
     return {"message": "Game deleted"}
 
 
@@ -128,6 +138,9 @@ async def delete_all_games(
     current_user: User = Depends(get_current_user), db: Session = Depends(get_db)
 ):
     """Delete all games for the current user"""
-    db.query(GameModel).filter(GameModel.user_id == current_user.id).delete()
-    db.commit()
+
+    s = select(GameModel).where(GameModel.user_id == current_user.id)
+    await db.delete(s)
+    await db.commit()
+
     return {"message": "All games deleted"}
