@@ -8,7 +8,7 @@ import jwt
 
 from backend.config import settings
 from backend.database import get_db
-from app.models.user import User
+from backend.app.models.user import User
 
 # Security
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")

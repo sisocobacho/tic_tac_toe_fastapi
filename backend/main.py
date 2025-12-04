@@ -4,9 +4,9 @@ import os
 from fastapi import FastAPI
 from fastapi.responses import FileResponse
 
-from .config import settings
-from .database import lifespan_setup
-from .app.api.v1 import users, games
+from backend.config import settings
+from backend.database import lifespan_setup
+from backend.app.api.v1 import users, games
 
 app = FastAPI(
     title="Tic Tac Toe API",

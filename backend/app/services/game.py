@@ -4,7 +4,7 @@ import json
 
 from sqlalchemy.ext.asyncio import AsyncSession as Session
 from sqlalchemy import select
-from app.models.game import GameModel
+from backend.app.models.game import GameModel
 
 
 class TicTacToeGame:

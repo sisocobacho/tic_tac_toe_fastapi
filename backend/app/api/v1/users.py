@@ -2,15 +2,15 @@ from datetime import timedelta
 from sqlalchemy.ext.asyncio import AsyncSession
 from fastapi import APIRouter, Depends, HTTPException, status
 from backend.database import get_db
-from app.services.user import (
+from backend.app.services.user import (
     get_password_hash,
     get_user_by_username,
     authenticate_user,
     create_access_token,
     get_current_user,
 )
-from app.models.user import User
-from app import schema
+from backend.app.models.user import User
+from backend.app import schema
 from backend.config import settings
 
 router = APIRouter()
@@ -29,10 +29,9 @@ async def register(user: schema.UserCreate, db: AsyncSession = Depends(get_db)):
     hashed_password = get_password_hash(user.password)
     db_user = User(username=user.username, hashed_password=hashed_password)
     db.add(db_user)
-    # db.commit()
-    # db.refresh(db_user)
+    await db.commit()
+    await db.refresh(db_user)
 
-    print(type(db_user.created_at))
     return schema.UserResponse(
         id=db_user.id, username=db_user.username, created_at=db_user.created_at
     )

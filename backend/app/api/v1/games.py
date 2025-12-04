@@ -2,11 +2,11 @@ from fastapi import APIRouter, HTTPException, Depends
 from backend.database import get_db
 from sqlalchemy.ext.asyncio import AsyncSession as Session
 from sqlalchemy import select
-from app.models.user import User
-from app.models.game import GameModel
-from app.services.user import get_current_user
-from app.services.game import TicTacToeGame, generate_game_id
-from app.schema.game import GameStateResponse, GameSummaryResponse
+from backend.app.models.user import User
+from backend.app.models.game import GameModel
+from backend.app.services.user import get_current_user
+from backend.app.services.game import TicTacToeGame, generate_game_id
+from backend.app.schema.game import GameStateResponse, GameSummaryResponse
 from typing import List
 
 router = APIRouter()
