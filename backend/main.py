@@ -5,13 +5,13 @@ from fastapi import FastAPI
 from fastapi.responses import FileResponse
 
 from .config import settings
-from .database import Base, engine
+from .database import lifespan_setup
 from .app.api.v1 import users, games
 
-app = FastAPI(title="Tic Tac Toe API")
-
-# Create tables
-Base.metadata.create_all(bind=engine)
+app = FastAPI(
+    title="Tic Tac Toe API",
+    lifespan=lifespan_setup,
+)
 
 # routers
 app.include_router(users.router, prefix="/api/v1/users", tags=["users"])
