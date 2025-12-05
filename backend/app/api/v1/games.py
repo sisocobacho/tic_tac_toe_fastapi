@@ -1,7 +1,7 @@
 from fastapi import APIRouter, HTTPException, Depends
 from backend.database import get_db
 from sqlalchemy.ext.asyncio import AsyncSession as Session
-from sqlalchemy import select
+from sqlalchemy import select, delete
 from backend.app.models.user import User
 from backend.app.models.game import GameModel
 from backend.app.services.user import get_current_user
@@ -90,14 +90,12 @@ async def list_games(
     db: Session = Depends(get_db),
 ):
     """List all games for the current user"""
-    s = (
-        select(GameModel)
-        .where(GameModel.user_id == current_user.id)
-        .offset(skip)
-        .limit(limit)
-    )
-    result = await db.execute(s)
-    db_games = result.all()
+    s = select(GameModel).where(
+            GameModel.user_id == current_user.id
+        ).offset(skip).limit(limit)
+    
+    result = (await db.execute(s))
+    db_games = result.scalars().all()
 
     return [
         GameSummaryResponse(
@@ -139,8 +137,8 @@ async def delete_all_games(
 ):
     """Delete all games for the current user"""
 
-    s = select(GameModel).where(GameModel.user_id == current_user.id)
-    await db.delete(s)
+    s = delete(GameModel).where(GameModel.user_id == current_user.id)
+    await db.execute(s)
     await db.commit()
 
     return {"message": "All games deleted"}
