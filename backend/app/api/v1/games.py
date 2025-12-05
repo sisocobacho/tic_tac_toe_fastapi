@@ -90,11 +90,14 @@ async def list_games(
     db: Session = Depends(get_db),
 ):
     """List all games for the current user"""
-    s = select(GameModel).where(
-            GameModel.user_id == current_user.id
-        ).offset(skip).limit(limit)
-    
-    result = (await db.execute(s))
+    s = (
+        select(GameModel)
+        .where(GameModel.user_id == current_user.id)
+        .offset(skip)
+        .limit(limit)
+    )
+
+    result = await db.execute(s)
     db_games = result.scalars().all()
 
     return [

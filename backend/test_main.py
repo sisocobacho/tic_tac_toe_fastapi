@@ -3,7 +3,12 @@ import json
 from starlette import status
 from httpx import ASGITransport, AsyncClient
 from collections.abc import AsyncGenerator
-from sqlalchemy.ext.asyncio import create_async_engine,AsyncEngine, AsyncSession, async_sessionmaker
+from sqlalchemy.ext.asyncio import (
+    create_async_engine,
+    AsyncEngine,
+    AsyncSession,
+    async_sessionmaker,
+)
 from sqlalchemy import select
 from fastapi import FastAPI
 
@@ -15,8 +20,10 @@ from backend.database import get_db
 from backend.app.models.user import User
 from backend.app.models.game import GameModel
 from typing import Any
+
 # Use async database for testing
 SQLALCHEMY_DATABASE_URL = "sqlite+aiosqlite:///./test_async.db"
+
 
 @pytest.fixture(scope="session")
 def anyio_backend() -> str:
@@ -38,7 +45,6 @@ async def _engine(anyio_backend: Any) -> AsyncGenerator[AsyncEngine]:
     from backend.database import meta
 
     load_all_models()
-
 
     engine = create_async_engine(SQLALCHEMY_DATABASE_URL)
     async with engine.begin() as conn:
@@ -109,101 +115,23 @@ async def client(
         transport=ASGITransport(fastapi_app), base_url="http://test", timeout=2.0
     ) as ac:
         yield ac
-#
-# # Create async engine for testing
-# engine = create_async_engine(
-#     SQLALCHEMY_DATABASE_URL,
-#     echo=False,
-#     poolclass=StaticPool,
-#     connect_args={"check_same_thread": False}
-# )
-#
-# # Create async session factory
-# TestingSessionLocal = async_sessionmaker(
-#     engine,
-#     class_=AsyncSession,
-#     expire_on_commit=False
-# )
-#
-#
-# # Async database dependency override
-# async def override_get_db():
-#     async with TestingSessionLocal() as session:
-#         try:
-#             yield session
-#             await session.commit()
-#         except Exception:
-#             await session.rollback()
-#             raise
-#         finally:
-#             await session.close()
-#
-#
-# app.dependency_overrides[get_db] = override_get_db
-#
-# # Keep synchronous client for simple tests
-#
 
-# Async fixtures
-# @pytest.fixture(scope="session")
-# def event_loop():
-#     """Create an instance of the default event loop for the test session."""
-#     loop = asyncio.get_event_loop_policy().new_event_loop()
-#     yield loop
-#     loop.close()
-#
-#
-# @pytest.fixture(autouse=True)
-# async def setup_database():
-#     """Set up the database before each test and tear down after"""
-#     # Create tables
-#     load_all_models()
-#     async with engine.begin() as conn:
-#         await conn.run_sync(Base.metadata.create_all)
-#     yield
-#     # Drop tables
-#     async with engine.begin() as conn:
-#         await conn.run_sync(Base.metadata.drop_all)
-#     await engine.dispose()
-#
-#
-# @pytest.fixture
-# async def client():
-#     """Async HTTP client fixture"""
-#     async with AsyncClient(app=app, base_url="http://test") as ac:
-#         yield ac
-#
-
-@pytest.fixture
-async def test_user():
-    """Fixture to create a test user"""
-    async with db() as db:
-        user = User(
-            username="testuser",
-            hashed_password=get_password_hash("testpassword")
-        )
-        db.add(user)
-        await db.commit()
-        await db.refresh(user)
-        return user
 
 async def create_test_user_async(db: AsyncSession):
     """Helper function to create a test user asynchronously"""
-    user = User(
-        username="testuser",
-        hashed_password=get_password_hash("testpassword")
-    )
+    user = User(username="testuser", hashed_password=get_password_hash("testpassword"))
     db.add(user)
     await db.commit()
     await db.refresh(user)
     return user
 
 
-async def get_auth_headers_async(client: AsyncClient, username="testuser", password="testpassword"):
+async def get_auth_headers_async(
+    client: AsyncClient, username="testuser", password="testpassword"
+):
     """Async helper function to get authentication headers"""
     response = await client.post(
-        "/api/v1/users/auth/login",
-        json={"username": username, "password": password}
+        "/api/v1/users/auth/login", json={"username": username, "password": password}
     )
     if response.status_code == 200:
         token = response.json()["access_token"]
@@ -221,6 +149,7 @@ async def test_health(client: AsyncClient, fastapi_app: FastAPI) -> None:
     url = fastapi_app.url_path_for("health_check")
     response = await client.get(url)
     assert response.status_code == status.HTTP_200_OK
+
 
 # Synchronous tests (keep these as they are)
 async def test_get_root_endpoint(client: AsyncClient):
@@ -255,6 +184,7 @@ async def test_user_registration(client: AsyncClient, db: AsyncSession):
     user = result.scalar_one_or_none()
     assert user is not None
 
+
 # Converted async tests
 async def test_user_login_async(client: AsyncClient, db: AsyncSession):
     """Test user login asynchronously"""
@@ -271,7 +201,9 @@ async def test_user_login_async(client: AsyncClient, db: AsyncSession):
 
 
 @pytest.mark.asyncio
-async def test_user_login_invalid_credentials_async(client: AsyncClient, db: AsyncSession):
+async def test_user_login_invalid_credentials_async(
+    client: AsyncClient, db: AsyncSession
+):
     """Test user login with invalid credentials asynchronously"""
     await create_test_user_async(db)
 
@@ -333,7 +265,9 @@ async def test_create_game_unauthenticated(client: AsyncClient):
 
 
 @pytest.mark.asyncio
-async def test_get_game_state_authenticated_async(client: AsyncClient, db: AsyncSession):
+async def test_get_game_state_authenticated_async(
+    client: AsyncClient, db: AsyncSession
+):
     """Test getting game state when authenticated asynchronously"""
     await create_test_user_async(db)
     headers = await get_auth_headers_async(client)
@@ -363,10 +297,7 @@ async def test_get_other_users_game_async(client: AsyncClient, db: AsyncSession)
     game_id = data["game_id"]
 
     # Create second user
-    user2 = User(
-        username="user2",
-        hashed_password=get_password_hash("password2")
-    )
+    user2 = User(username="user2", hashed_password=get_password_hash("password2"))
     db.add(user2)
     await db.commit()
 
@@ -393,9 +324,7 @@ async def test_make_valid_move_async(client: AsyncClient, db: AsyncSession):
     assert "O" in data["board"]  # Computer should have made a move
 
     # Verify database was updated
-    result = await db.execute(
-        select(GameModel).where(GameModel.game_id == game_id)
-    )
+    result = await db.execute(select(GameModel).where(GameModel.game_id == game_id))
     db_game = result.scalar_one_or_none()
     updated_board = json.loads(db_game.board)
     assert updated_board[0] == "X"
@@ -457,7 +386,9 @@ async def test_list_games_authenticated_async(client: AsyncClient, db: AsyncSess
 
 
 @pytest.mark.asyncio
-async def test_list_games_with_skip_and_limit_async(client: AsyncClient, db: AsyncSession):
+async def test_list_games_with_skip_and_limit_async(
+    client: AsyncClient, db: AsyncSession
+):
     """Test listing games with both skip and limit parameters asynchronously"""
     await create_test_user_async(db)
     headers = await get_auth_headers_async(client)
@@ -488,9 +419,7 @@ async def test_delete_game_authenticated_async(client: AsyncClient, db: AsyncSes
     assert response.status_code == 200
 
     # Verify game is deleted from database
-    result = await db.execute(
-        select(GameModel).where(GameModel.game_id == game_id)
-    )
+    result = await db.execute(select(GameModel).where(GameModel.game_id == game_id))
     db_game = result.scalar_one_or_none()
     assert db_game is None
 
@@ -506,7 +435,9 @@ async def test_delete_nonexistent_game_async(client: AsyncClient, db: AsyncSessi
 
 
 @pytest.mark.asyncio
-async def test_delete_all_games_authenticated_async(client: AsyncClient, db: AsyncSession):
+async def test_delete_all_games_authenticated_async(
+    client: AsyncClient, db: AsyncSession
+):
     """Test deleting all games when authenticated asynchronously"""
     await create_test_user_async(db)
     headers = await get_auth_headers_async(client)
@@ -577,9 +508,10 @@ async def test_get_nonexistent_game_async(client: AsyncClient, db: AsyncSession)
     """Test getting a non-existent game asynchronously"""
     await create_test_user_async(db)
     headers = await get_auth_headers_async(client)
-    
+
     response = await client.get("/api/v1/games/nonexistent", headers=headers)
     assert response.status_code == 404
+
 
 @pytest.mark.asyncio
 async def test_game_class_from_db_model():
@@ -606,13 +538,10 @@ async def test_concurrent_game_creation(client: AsyncClient, db: AsyncSession):
     headers = await get_auth_headers_async(client)
 
     # Create multiple games concurrently
-    tasks = [
-        await client.post("/api/v1/games/", headers=headers)
-        for _ in range(5)
-    ]
-    
+    tasks = [await client.post("/api/v1/games/", headers=headers) for _ in range(5)]
+
     responses = tasks
-    
+
     for response in responses:
         assert response.status_code == 200
         assert "game_id" in response.json()
@@ -627,25 +556,21 @@ async def test_websocket_connection_async():
     pass
 
 
-
 @pytest.mark.asyncio
 async def test_database_operations_directly(db: AsyncSession):
     """Test database operations directly without HTTP"""
     # Create user
     user = User(
-        username="direct_test",
-        hashed_password=get_password_hash("direct_pass")
+        username="direct_test", hashed_password=get_password_hash("direct_pass")
     )
     db.add(user)
     await db.commit()
     await db.refresh(user)
-    
+
     # Query user
-    result = await db.execute(
-        select(User).where(User.username == "direct_test")
-    )
+    result = await db.execute(select(User).where(User.username == "direct_test"))
     fetched_user = result.scalar_one_or_none()
-    
+
     assert fetched_user is not None
     assert fetched_user.username == "direct_test"
 
