@@ -54,6 +54,7 @@ def _setup_db(app: FastAPI) -> None:  # pragma: no cover
 async def _create_tables() -> None:  # pragma: no cover
     """Populates tables in the database."""
     from app.models import load_all_models
+
     load_all_models()
     engine = create_async_engine(str(settings.DATABASE_URL))
     async with engine.begin() as connection:

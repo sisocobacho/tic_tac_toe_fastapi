@@ -5,6 +5,7 @@ from pathlib import Path
 
 load_dotenv()
 
+
 class Settings(BaseSettings):
     # Database
     db_file: str = "tictactoe.db"
