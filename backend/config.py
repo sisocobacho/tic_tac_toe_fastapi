@@ -5,7 +5,6 @@ from pathlib import Path
 
 load_dotenv()
 
-
 class Settings(BaseSettings):
     # Database
     db_file: str = "tictactoe.db"
@@ -18,10 +17,8 @@ class Settings(BaseSettings):
     )
     ALGORITHM: str = "HS256"
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 120
-
-    # BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    # dirs
     BASE_DIR: Path = Path(__file__).parent.parent
-    # FRONTEND_DIR = os.path.join(BASE_DIR, "frontend")
     FRONTEND_DIR: Path = BASE_DIR / "frontend"
 
 

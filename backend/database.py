@@ -53,8 +53,8 @@ def _setup_db(app: FastAPI) -> None:  # pragma: no cover
 
 async def _create_tables() -> None:  # pragma: no cover
     """Populates tables in the database."""
-    # from app.models import load_all_models
-    # load_all_models()
+    from app.models import load_all_models
+    load_all_models()
     engine = create_async_engine(str(settings.DATABASE_URL))
     async with engine.begin() as connection:
         await connection.run_sync(meta.create_all)
@@ -77,7 +77,7 @@ async def lifespan_setup(
 
     app.middleware_stack = None
     _setup_db(app)
-    await _create_tables()
+    # await _create_tables()
     app.middleware_stack = app.build_middleware_stack()
 
     yield

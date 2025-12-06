@@ -20,3 +20,9 @@ check: ruff
 format: ruff
 	uv run ruff format
 
+migrate:
+	uv run alembic upgrade head
+
+migrate_current:
+	uv run alembic current
+
