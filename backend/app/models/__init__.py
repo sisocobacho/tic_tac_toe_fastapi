@@ -9,7 +9,6 @@ from pathlib import Path
 def load_all_models() -> None:
     """Load all models from this folder."""
     package_dir = Path(__file__).resolve().parent
-    print(package_dir)
     modules = pkgutil.walk_packages(
         path=[str(package_dir)],
         prefix="backend.app.models.",
