@@ -14,5 +14,4 @@ def load_all_models() -> None:
         prefix="backend.app.models.",
     )
     for module in modules:
-        print(module)
         __import__(module.name)
