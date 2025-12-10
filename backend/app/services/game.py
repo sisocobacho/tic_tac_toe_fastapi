@@ -1,10 +1,10 @@
 from datetime import datetime
-from typing import List, Dict
+from typing import List, Dict, Optional
 import json
 
 from sqlalchemy.ext.asyncio import AsyncSession as Session
 from sqlalchemy import select
-from backend.app.models.game import GameModel
+from backend.app.models.game import GameModel, GameType, GameStatus
 
 
 class TicTacToeGame:
@@ -15,12 +15,20 @@ class TicTacToeGame:
         current_player: str = "X",
         winner: str = "",
         game_over: bool = False,
+        game_type: GameType = GameType.VS_COMPUTER,
+        game_status: GameStatus = GameStatus.PLAYING,
+        player_x: Optional[int] = None,
+        player_o: Optional[int] = None,
     ):
         self.game_id = game_id
         self.board = board if board is not None else [" " for _ in range(9)]
         self.current_player = current_player
         self.winner = winner
         self.game_over = game_over
+        self.game_type = game_type
+        self.game_status = game_status
+        self.player_x = player_x
+        self.player_o = player_o
 
     @classmethod
     async def from_db_model(cls, db_game: GameModel):
@@ -32,27 +40,31 @@ class TicTacToeGame:
             current_player=db_game.current_player,
             winner=db_game.winner,
             game_over=db_game.game_over,
+            game_type=db_game.game_type,
+            game_status=db_game.game_status,
+            player_x=db_game.player_x,
+            player_o=db_game.player_o,
         )
 
     async def to_db_model(self, db: Session, user_id: int | None = None) -> GameModel:
         """Convert to database model"""
-        print("select", self.game_id)
-        s = select(GameModel).where(
-            GameModel.game_id == self.game_id,
-        )
-
+        s = select(GameModel).where(GameModel.game_id == self.game_id)
         result = await db.execute(s)
         db_game = result.scalar_one_or_none()
 
-        print("to db game", db_game)
         if not db_game:
-            print("no game")
-            db_game = GameModel(game_id=self.game_id, user_id=user_id)
+            db_game = GameModel(
+                game_id=self.game_id, user_id=user_id, game_type=self.game_type
+            )
 
         db_game.board = json.dumps(self.board)
         db_game.current_player = self.current_player
         db_game.winner = self.winner
         db_game.game_over = self.game_over
+        db_game.game_type = self.game_type
+        db_game.game_status = self.game_status
+        db_game.player_x = self.player_x
+        db_game.player_o = self.player_o
         db_game.updated_at = datetime.utcnow()
 
         return db_game
@@ -68,22 +80,31 @@ class TicTacToeGame:
     async def make_move(
         self, position: int, db: Session, user_id: int | None = None
     ) -> bool:
-        """Make a move for the human player and save to db"""
+        """Make a move in the game and save to db"""
         if self.game_over or self.board[position] != " ":
             return False
 
-        self.board[position] = "X"
+        # Make the move
+        self.board[position] = self.current_player
 
-        if self.check_winner("X"):
-            self.winner = "X"
+        # Check for winner or tie
+        if self.check_winner(self.current_player):
+            self.winner = self.current_player
             self.game_over = True
+            self.game_status = GameStatus.FINISHED
         elif self.is_board_full():
             self.game_over = True
+            self.game_status = GameStatus.FINISHED
         else:
-            self.computer_move()
+            # Switch player
+            self.current_player = "O" if self.current_player == "X" else "X"
+
+            # If vs computer and it's computer's turn, make computer move
+            if self.game_type == GameType.VS_COMPUTER and self.current_player == "O":
+                self.computer_move()
 
         # Save to database after move
-        await self.save_to_db(db, user_id)
+        await self.save_to_db(db, self.player_x)
         return True
 
     def computer_move(self) -> None:
@@ -111,8 +132,10 @@ class TicTacToeGame:
             if self.check_winner("O"):
                 self.winner = "O"
                 self.game_over = True
+                self.game_status = GameStatus.FINISHED
             elif self.is_board_full():
                 self.game_over = True
+                self.game_status = GameStatus.FINISHED
             else:
                 self.current_player = "X"
 
@@ -153,7 +176,6 @@ class TicTacToeGame:
 
     def check_winner_board(self, player: str, board: List[str]) -> bool:
         """Check winner for a given board state"""
-        # Check rows, columns, and diagonals
         win_conditions = [
             [0, 1, 2],
             [3, 4, 5],
@@ -180,12 +202,17 @@ class TicTacToeGame:
 
     async def get_game_state(self) -> Dict:
         """Return current game state"""
+        print(self.game_status.value)
         return {
             "game_id": self.game_id,
             "board": self.board,
             "current_player": self.current_player,
             "winner": self.winner,
             "game_over": self.game_over,
+            "game_type": self.game_type.value,
+            "game_status": self.game_status.value,
+            "player_x": self.player_x,
+            "player_o": self.player_o,
         }
 
 
