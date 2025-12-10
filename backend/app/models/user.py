@@ -13,4 +13,6 @@ class User(Base):
     created_at = Column(DateTime, default=datetime.utcnow)
     is_active = Column(Boolean, default=True)
 
-    games = relationship("GameModel", back_populates="user")
+    games = relationship(
+        "GameModel", back_populates="user", foreign_keys="GameModel.user_id"
+    )
