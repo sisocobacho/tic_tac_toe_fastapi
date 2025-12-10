@@ -63,6 +63,58 @@
             border-radius: 4px;
             background: #fff;
         }
+        /* Multiplayer styles */
+        .multiplayer-section {
+            margin: 20px auto;
+            width: 600px;
+            padding: 20px;
+            border: 1px solid #ccc;
+            border-radius: 5px;
+        }
+        .game-options {
+            display: flex;
+            justify-content: center;
+            gap: 20px;
+            margin: 20px 0;
+        }
+        .available-games {
+            margin: 20px 0;
+            text-align: left;
+        }
+        .available-game {
+            padding: 10px;
+            border: 1px solid #ddd;
+            margin: 5px 0;
+            border-radius: 4px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        .chat-section {
+            margin: 20px auto;
+            width: 400px;
+            padding: 20px;
+            border: 1px solid #ccc;
+            border-radius: 5px;
+            text-align: left;
+        }
+        .chat-messages {
+            height: 200px;
+            overflow-y: auto;
+            border: 1px solid #ddd;
+            padding: 10px;
+            margin-bottom: 10px;
+        }
+        .chat-message {
+            margin: 5px 0;
+            padding: 5px;
+            border-bottom: 1px solid #eee;
+        }
+        .chat-input {
+            width: 100%;
+            padding: 8px;
+            margin-top: 10px;
+        }
     </style>
 </head>
 <body>
@@ -95,10 +147,30 @@
     </div>
 </div>
 
+<div class="game-options" id="gameOptions" style="display: none;">
+    <button onclick="createVsComputerGame()">Play vs Computer</button>
+    <button onclick="createMultiplayerGame()">Create Multiplayer Game</button>
+    <button onclick="showAvailableGames()">Join Multiplayer Game</button>
+</div>
+
+<div class="multiplayer-section" id="availableGamesSection" style="display: none;">
+    <h3>Available Multiplayer Games</h3>
+    <div id="availableGamesList" class="available-games"></div>
+    <button onclick="hideAvailableGames()">Close</button>
+</div>
+
 <div class="status" id="status">Please login to play!</div>
 <div class="board" id="board"></div>
+<div id="message" class="error"></div>
 <button onclick="newGame()" id="newGameBtn" disabled>New Game</button>
 <button onclick="loadGameHistory()" id="historyBtn" disabled>Game History</button>
+
+<div class="chat-section" id="chatSection" style="display: none;">
+    <h3>Game Chat</h3>
+    <div id="chatMessages" class="chat-messages"></div>
+    <input type="text" id="chatInput" class="chat-input" placeholder="Type a message..." onkeypress="handleChatKeyPress(event)">
+    <button onclick="sendChatMessage()">Send</button>
+</div>
 
 <div class="game-history" id="gameHistory" style="display: none;">
     <h3>Your Game History</h3>
@@ -128,13 +200,14 @@
     <button onclick="hideGameHistory()">Close</button>
 </div>
 
-<div id="message" class="error"></div>
 
 <script>
     const API_BASE = '/api/v1';
     let currentGameId = null;
     let token = localStorage.getItem('token');
     let currentUser = null;
+    let websocket = null;
+    let currentGameType = null;
     
     // Pagination state
     let paginationState = {
@@ -172,9 +245,10 @@
         document.getElementById('username').textContent = user.username;
         document.getElementById('userInfo').style.display = 'block';
         document.getElementById('loginSection').style.display = 'none';
+        document.getElementById('gameOptions').style.display = 'flex';
         document.getElementById('newGameBtn').disabled = false;
         document.getElementById('historyBtn').disabled = false;
-        document.getElementById('status').textContent = 'Click New Game to start!';
+        document.getElementById('status').textContent = 'Choose a game mode to start!';
     }
 
     function showLogin() {
@@ -240,10 +314,13 @@
         localStorage.removeItem('token');
         token = null;
         currentUser = null;
+        disconnectWebSocket();
         document.getElementById('userInfo').style.display = 'none';
         document.getElementById('loginSection').style.display = 'block';
+        document.getElementById('gameOptions').style.display = 'none';
         document.getElementById('newGameBtn').disabled = true;
         document.getElementById('historyBtn').disabled = true;
+        document.getElementById('chatSection').style.display = 'none';
         document.getElementById('status').textContent = 'Please login to play!';
         document.getElementById('board').innerHTML = '';
         currentGameId = null;
@@ -257,31 +334,236 @@
         setTimeout(() => messageDiv.textContent = '', 3000);
     }
 
-    async function newGame() {
+    async function createVsComputerGame() {
         if (!token) return;
 
         const response = await fetch(API_BASE + '/games/', {
             method: 'POST',
-            headers: { 'Authorization': 'Bearer ' + token }
+            headers: { 
+                'Authorization': 'Bearer ' + token,
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({ game_type: 'VS_COMPUTER' })
         });
+        
         const game = await response.json();
         currentGameId = game.game_id;
+        currentGameType = game.game_type;
+        disconnectWebSocket(); // No WebSocket needed for vs computer
+        document.getElementById('chatSection').style.display = 'none';
         updateBoard(game);
+    }
+
+    async function createMultiplayerGame() {
+        if (!token) return;
+
+        const response = await fetch(API_BASE + '/games/', {
+            method: 'POST',
+            headers: { 
+                'Authorization': 'Bearer ' + token,
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({ game_type: 'VS_PLAYER' })
+        });
+        
+        const game = await response.json();
+        currentGameId = game.game_id;
+        currentGameType = game.game_type;
+        
+        if (response.ok) {
+            showMessage('Multiplayer game created! Waiting for another player...', 'success');
+            connectWebSocket();
+            updateBoard(game);
+        }
+    }
+
+    async function showAvailableGames() {
+        if (!token) return;
+
+        const response = await fetch(API_BASE + '/games/multiplayer/available', {
+            headers: { 'Authorization': 'Bearer ' + token }
+        });
+        
+        if (response.ok) {
+            const games = await response.json();
+            const gamesList = document.getElementById('availableGamesList');
+            gamesList.innerHTML = '';
+            
+            if (games.length === 0) {
+                gamesList.innerHTML = '<p>No available games. Create one!</p>';
+            } else {
+                games.forEach(game => {
+                    const gameDiv = document.createElement('div');
+                    gameDiv.className = 'available-game';
+                    gameDiv.innerHTML = `
+                        <div>
+                            <strong>Game ID:</strong> ${game.game_id.substring(0, 10)}...<br>
+                            <small>Created: ${new Date(game.created_at).toLocaleString()}</small>
+                        </div>
+                        <button onclick="joinGame('${game.game_id}')">Join Game</button>
+                    `;
+                    gamesList.appendChild(gameDiv);
+                });
+            }
+            
+            document.getElementById('availableGamesSection').style.display = 'block';
+        }
+    }
+
+    function hideAvailableGames() {
+        document.getElementById('availableGamesSection').style.display = 'none';
+    }
+
+    async function joinGame(gameId) {
+        if (!token) return;
+
+        const response = await fetch(`${API_BASE}/games/${gameId}/join`, {
+            method: 'POST',
+            headers: { 'Authorization': 'Bearer ' + token }
+        });
+        
+        if (response.ok) {
+            const game = await response.json();
+            currentGameId = game.game_id;
+            currentGameType = game.game_type;
+            hideAvailableGames();
+            connectWebSocket();
+            updateBoard(game);
+            showMessage('Joined game successfully!', 'success');
+        } else {
+            showMessage('Failed to join game', 'error');
+        }
+    }
+
+    function connectWebSocket() {
+        if (!token || !currentGameId || !currentGameType || currentGameType !== 'VS_PLAYER') {
+            return;
+        }
+
+        disconnectWebSocket();
+
+        // Use wss:// for HTTPS, ws:// for HTTP
+        const protocol = window.location.protocol === 'https:' ? 'wss://' : 'ws://';
+        const wsUrl = `${protocol}${window.location.host}/api/v1/ws/${currentGameId}?token=${token}`;
+        
+        websocket = new WebSocket(wsUrl);
+
+        websocket.onopen = () => {
+            console.log('WebSocket connected');
+            document.getElementById('chatSection').style.display = 'block';
+            addChatMessage('System', 'Connected to game chat');
+        };
+
+        websocket.onmessage = (event) => {
+            const data = JSON.parse(event.data);
+            handleWebSocketMessage(data);
+        };
+
+        websocket.onclose = () => {
+            console.log('WebSocket disconnected');
+            if (currentGameType === 'VS_PLAYER') {
+                addChatMessage('System', 'Disconnected from game');
+            }
+        };
+
+        websocket.onerror = (error) => {
+            console.error('WebSocket error:', error);
+        };
+    }
+
+    function disconnectWebSocket() {
+        if (websocket) {
+            websocket.close();
+            websocket = null;
+        }
+    }
+
+    function handleWebSocketMessage(data) {
+        switch (data.type) {
+            case 'connected':
+                addChatMessage('System', data.data.message);
+                break;
+                
+            case 'game_state':
+                updateBoard(data.data);
+                break;
+                
+            case 'player_joined':
+                addChatMessage('System', `${data.data.username} joined the game`);
+                break;
+                
+            case 'player_left':
+                addChatMessage('System', `${data.data.username} left the game`);
+                break;
+                
+            case 'chat_message':
+                addChatMessage(data.data.username, data.data.message);
+                break;
+                
+            case 'game_over':
+                addChatMessage('System', data.data.message);
+                showMessage(data.data.message, 'success');
+                break;
+                
+            case 'error':
+                showMessage(data.data.message, 'error');
+                addChatMessage('System', data.data.message);
+                break;
+        }
+    }
+
+    function addChatMessage(sender, message) {
+        const chatMessages = document.getElementById('chatMessages');
+        const messageDiv = document.createElement('div');
+        messageDiv.className = 'chat-message';
+        messageDiv.innerHTML = `<strong>${sender}:</strong> ${message}`;
+        chatMessages.appendChild(messageDiv);
+        chatMessages.scrollTop = chatMessages.scrollHeight;
+    }
+
+    function handleChatKeyPress(event) {
+        if (event.key === 'Enter') {
+            sendChatMessage();
+        }
+    }
+
+    function sendChatMessage() {
+        const chatInput = document.getElementById('chatInput');
+        const message = chatInput.value.trim();
+        
+        if (message && websocket && websocket.readyState === WebSocket.OPEN) {
+            websocket.send(JSON.stringify({
+                type: 'chat_message',
+                message: message
+            }));
+            chatInput.value = '';
+        }
     }
 
     async function makeMove(position, target) {
         if (!currentGameId || !token) return;
-        console.log(target);
-        target.textContent = "..."
-        const response = await fetch(`${API_BASE}/games/${currentGameId}/move/${position}`, {
-            method: 'POST',
-            headers: { 'Authorization': 'Bearer ' + token }
-        });
-        if (response.ok) {
-            const game = await response.json();
-            updateBoard(game);
-        } else {
-            showMessage('Invalid move!', 'error');
+        
+        if (currentGameType === 'VS_COMPUTER') {
+            // Regular HTTP request for vs computer
+            target.textContent = "...";
+            const response = await fetch(`${API_BASE}/games/${currentGameId}/move/${position}`, {
+                method: 'POST',
+                headers: { 'Authorization': 'Bearer ' + token }
+            });
+            
+            if (response.ok) {
+                const game = await response.json();
+                updateBoard(game);
+            } else {
+                showMessage('Invalid move!', 'error');
+            }
+        } else if (currentGameType === 'VS_PLAYER' && websocket && websocket.readyState === WebSocket.OPEN) {
+            // WebSocket for multiplayer
+            target.textContent = "...";
+            websocket.send(JSON.stringify({
+                type: 'make_move',
+                position: position
+            }));
         }
     }
 
@@ -300,13 +582,31 @@
         const status = document.getElementById('status');
         if (game.game_over) {
             status.textContent = game.winner ?
-                (game.winner === 'X' ? 'You win!' : 'Computer wins!') :
+                (game.winner === 'X' ? 'X wins!' : 'O wins!') :
                 "It's a tie!";
         } else {
-            status.textContent = game.current_player === 'X' ?
-                "Your turn (X)" : "Computer's turn (O)";
+            if (game.game_type === 'VS_COMPUTER') {
+                status.textContent = game.current_player === 'X' ?
+                    "Your turn (X)" : "Computer's turn (O)";
+            } else {
+                // Multiplayer game
+                let playerText = '';
+                if (game.current_player === 'X') {
+                    playerText = game.player_x === currentUser.id ? 
+                        'Your turn (X)' : 'Opponent\'s turn (X)';
+                } else {
+                    playerText = game.player_o === currentUser.id ? 
+                        'Your turn (O)' : 'Opponent\'s turn (O)';
+                }
+                status.textContent = playerText;
+            }
         }
+        
+        // Update current game type
+        currentGameType = game.game_type;
     }
+
+    // ... (rest of the functions remain the same: loadGameHistory, fetchGameHistory, etc.)
 
     async function loadGameHistory() {
         if (!token) return;
@@ -358,15 +658,19 @@
             // Format game status
             let statusText = 'In Progress';
             if (game.game_over) {
-                statusText = game.winner === 'X' ? 'You Won' : 
-                           game.winner === 'O' ? 'Computer Won' : 
-                           game.winner === 'tie' ? 'Tie' : 'Completed';
+                statusText = game.winner === 'X' ? 'X Won' : 
+                           game.winner === 'O' ? 'O Won' : 
+                           'Tie';
             }
             
+            // Format game type
+            let typeText = game.game_type === 'VS_COMPUTER' ? 'vs Computer' : 'Multiplayer';
+            
             gameDiv.innerHTML = `
-                <strong>Game:</strong> ${game.game_id.substring(0, 15)}... |
+                <strong>Game:</strong> ${game.game_id.substring(0, 15)}...<br>
+                <strong>Type:</strong> ${typeText} |
                 <strong>Status:</strong> ${statusText} |
-                <strong>Current Player:</strong> ${game.current_player} |
+                <strong>Current Player:</strong> ${game.current_player}<br>
                 <strong>Created:</strong> ${new Date(game.created_at).toLocaleDateString()}
                 <div style="margin-top: 5px;">
                     <button onclick="loadGame('${game.game_id}')">Load</button>
@@ -425,7 +729,6 @@
 
     function goToLastPage() {
         // For now, we'll just go to next page since we don't know total pages
-        // In a real implementation, you might want to get total count from API
         if (!paginationState.hasMore) return;
         paginationState.currentPage++;
         fetchGameHistory();
@@ -445,13 +748,26 @@
     }
 
     async function loadGame(gameId) {
+        disconnectWebSocket();
+        
         const response = await fetch(`${API_BASE}/games/${gameId}`, {
             headers: { 'Authorization': 'Bearer ' + token }
         });
-        const game = await response.json();
-        currentGameId = game.game_id;
-        updateBoard(game);
-        hideGameHistory();
+        
+        if (response.ok) {
+            const game = await response.json();
+            currentGameId = game.game_id;
+            currentGameType = game.game_type;
+            
+            if (game.game_type === 'VS_PLAYER') {
+                connectWebSocket();
+            } else {
+                document.getElementById('chatSection').style.display = 'none';
+            }
+            
+            updateBoard(game);
+            hideGameHistory();
+        }
     }
 
     async function deleteGame(gameId) {
